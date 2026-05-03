@@ -1,0 +1,129 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+@layer base {
+  :root {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 98%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 215 20% 15%;
+    --secondary-foreground: 0 0% 98%;
+    --accent: 142 92% 51%;
+    --accent-foreground: 0 0% 0%;
+    --muted: 215 20% 15%;
+    --muted-foreground: 215 16% 47%;
+    --card: 215 20% 12%;
+    --card-foreground: 0 0% 98%;
+    --border: 215 20% 18%;
+    --input: 215 20% 18%;
+    --ring: 217 91% 60%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+  }
+
+  :root.light {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 0%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 215 20% 95%;
+    --secondary-foreground: 0 0% 0%;
+    --accent: 142 92% 40%;
+    --accent-foreground: 0 0% 100%;
+    --muted: 215 20% 96%;
+    --muted-foreground: 215 16% 40%;
+    --card: 0 0% 99%;
+    --card-foreground: 0 0% 0%;
+    --border: 215 20% 90%;
+    --input: 215 20% 90%;
+    --ring: 217 91% 60%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-black text-white font-sans antialiased;
+  }
+}
+
+/* Tactical utility classes */
+@layer utilities {
+  .text-tactical {
+    @apply font-black uppercase tracking-tighter;
+  }
+
+  .btn-tactical {
+    @apply h-14 px-6 rounded-xl font-bold text-base
+           bg-tactical-blue text-white
+           shadow-tactical hover:shadow-tactical-lg
+           active:translate-x-[2px] active:translate-y-[2px]
+           active:shadow-none transition-all duration-100;
+  }
+
+  .btn-tactical-secondary {
+    @apply h-14 px-6 rounded-xl font-bold text-base
+           bg-tactical-slate text-white border border-white/10
+           hover:bg-white/10 active:translate-x-[2px] active:translate-y-[2px]
+           transition-all duration-100;
+  }
+
+  .btn-tactical-danger {
+    @apply h-14 px-6 rounded-xl font-bold text-base
+           bg-tactical-red text-white
+           shadow-tactical hover:shadow-tactical-lg
+           active:translate-x-[2px] active:translate-y-[2px]
+           active:shadow-none transition-all duration-100;
+  }
+
+  .card-tactical {
+    @apply bg-tactical-slate rounded-2xl border border-white/10 p-5;
+  }
+
+  .glassmorphism {
+    @apply bg-white/5 backdrop-blur-xl border border-white/10;
+  }
+}
+
+/* Hide scrollbar but allow scrolling */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Glow effects */
+.glow-blue {
+  box-shadow: 0 0 30px rgba(59, 130, 246, 0.5);
+}
+
+.glow-green {
+  box-shadow: 0 0 30px rgba(34, 255, 102, 0.5);
+}
+
+/* Number animation */
+@keyframes count-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-count {
+  animation: count-up 0.5s ease-out forwards;
+}
