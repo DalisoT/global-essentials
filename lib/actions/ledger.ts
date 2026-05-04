@@ -1,106 +1,90 @@
 'use server';
 
 import { createServerSupabaseClient, requireAuth } from '@/lib/supabase-server';
-import type { Sale, Product, Expense } from '@/lib/supabase-types';
 
-export async function getAnalyticsData() {
+export async function getSalesHistory(
+  search?: string,
+  options?: { limit?: number; offset?: number }
+) {
+  const auth = await requireAuth();
+  if ('error' in auth) return { data: null, error: auth.error, count: 0 };
+  const supabase = auth.supabase;
+  const limit = options?.limit ?? 50;
+  const offset = options?.offset ?? 0;
+
+  let query = supabase
+    .from('sales')
+    .select(
+      `
+      *,
+      product:products(*),
+      client:clients(*)
+    `,
+      { count: 'exact' }
+    )
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (search) {
+    query = query.or(`product.name.ilike.%${search}%,client.full_name.ilike.%${search}%`);
+  }
+
+  const { data, error, count } = await query;
+
+  return { data: data || [], error, count };
+}
+
+export async function searchDebts(search?: string) {
   const auth = await requireAuth();
   if ('error' in auth) return { data: null, error: auth.error };
   const supabase = auth.supabase;
-  // Get all paid sales
-  const { data: paidSales } = await supabase
-    .from('sales')
-    .select('*, product:products(*)')
-    .eq('payment_status', 'paid');
+  let query = supabase
+    .from('installments')
+    .select(`
+      *,
+      sale:sales(
+        *,
+        product:products(*),
+        client:clients(*)
+      )
+    `)
+    .eq('is_paid', false)
+    .order('due_date', { ascending: true });
 
-  // Get all expenses
-  const { data: expenses } = await supabase.from('expenses').select('*');
-
-  // Get all products
-  const { data: products } = await supabase.from('products').select('*');
-
-  // Calculate total revenue
-  const totalRevenue = paidSales?.reduce((sum: number, s: Sale) => sum + s.total_amount, 0) || 0;
-  const totalExpenses = expenses?.reduce((sum: number, e: Expense) => sum + e.amount, 0) || 0;
-  const netProfit = totalRevenue - totalExpenses;
-
-  // Revenue by day (last 7 days)
-  const last7Days: Record<string, number> = {};
-  const today = new Date();
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date(today);
-    date.setDate(date.getDate() - i);
-    const key = date.toISOString().split('T')[0];
-    last7Days[key] = 0;
+  if (search) {
+    query = query.or(`sale.client.full_name.ilike.%${search}%`);
   }
 
-  paidSales?.forEach((sale: Sale & { product?: Product }) => {
-    const date = sale.created_at.split('T')[0];
-    if (last7Days[date] !== undefined) {
-      last7Days[date] += sale.total_amount;
-    }
-  });
+  const { data, error } = await query;
 
-  // Expenses by category
-  const expensesByCategory: Record<string, number> = {};
-  expenses?.forEach((e: Expense) => {
-    expensesByCategory[e.category] = (expensesByCategory[e.category] || 0) + e.amount;
-  });
+  return { data: data || [], error };
+}
 
-  // Top selling products (by number of sales)
-  const salesByProduct: Record<string, number> = {};
-  paidSales?.forEach((sale: Sale) => {
-    salesByProduct[sale.product_id] = (salesByProduct[sale.product_id] || 0) + 1;
-  });
+export async function markInstallmentPaid(installmentId: string) {
+  const auth = await requireAuth();
+  if ('error' in auth) return { data: null, error: auth.error };
+  const supabase = auth.supabase;
+  const { error } = await supabase
+    .from('installments')
+    .update({ is_paid: true, paid_at: new Date().toISOString() })
+    .eq('id', installmentId);
 
-  const topProducts = Object.entries(salesByProduct)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 5)
-    .map(([productId, count]) => {
-      const product = products?.find((p: Product) => p.id === productId);
-      return {
-        id: productId,
-        name: product?.name || 'Unknown',
-        count,
-        revenue: count * (product?.selling_price || 0),
-      };
-    });
+  if (error) return { error: error.message };
 
-  // Monthly comparison (last 6 months)
-  const monthlyData: Record<string, { revenue: number; expenses: number }> = {};
-  for (let i = 0; i < 6; i++) {
-    const date = new Date();
-    date.setMonth(date.getMonth() - i);
-    const key = date.toISOString().substring(0, 7);
-    monthlyData[key] = { revenue: 0, expenses: 0 };
+  // Check if all installments for this sale are paid
+  const { data: installments } = await supabase
+    .from('installments')
+    .select('sale_id, is_paid')
+    .eq('sale_id', (await supabase.from('installments').select('sale_id').eq('id', installmentId).single())?.data?.sale_id);
+
+  const allPaid = installments?.every((inst) => inst.is_paid);
+
+  if (allPaid) {
+    await supabase
+      .from('sales')
+      .update({ payment_status: 'paid' })
+      .eq('id', installments?.[0]?.sale_id);
   }
 
-  paidSales?.forEach((sale: Sale) => {
-    const month = sale.created_at.substring(0, 7);
-    if (monthlyData[month]) {
-      monthlyData[month].revenue += sale.total_amount;
-    }
-  });
-
-  expenses?.forEach((e: Expense) => {
-    const month = e.created_at.substring(0, 7);
-    if (monthlyData[month]) {
-      monthlyData[month].expenses += e.amount;
-    }
-  });
-
-  return {
-    totalRevenue,
-    totalExpenses,
-    netProfit,
-    revenueByDay: Object.entries(last7Days).map(([date, amount]) => ({ date, amount })),
-    expensesByCategory: Object.entries(expensesByCategory).map(([category, amount]) => ({
-      category,
-      amount,
-    })),
-    topProducts,
-    monthlyData: Object.entries(monthlyData)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, data]) => ({ month, ...data })),
-  };
+  return { data: null, error: null };
 }

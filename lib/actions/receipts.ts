@@ -1,90 +1,45 @@
 'use server';
 
 import { createServerSupabaseClient, requireAuth } from '@/lib/supabase-server';
+import { generateReceiptHTML, type ReceiptData } from '@/lib/receipts/template';
 
-export async function getSalesHistory(
-  search?: string,
-  options?: { limit?: number; offset?: number }
-) {
+export async function getSaleReceipt(saleId: string): Promise<{ data?: string; error?: string }> {
   const auth = await requireAuth();
-  if ('error' in auth) return { data: null, error: auth.error, count: 0 };
+  if ('error' in auth) return { data: null, error: auth.error };
   const supabase = auth.supabase;
-  const limit = options?.limit ?? 50;
-  const offset = options?.offset ?? 0;
 
-  let query = supabase
+  const { data: sale, error } = await supabase
     .from('sales')
     .select(
       `
       *,
-      product:products(*),
-      client:clients(*)
-    `,
-      { count: 'exact' }
+      product:products(name),
+      client:clients(full_name, phone_number),
+      installments(*)
+    `
     )
-    .order('created_at', { ascending: false })
-    .range(offset, offset + limit - 1);
+    .eq('id', saleId)
+    .single();
 
-  if (search) {
-    query = query.or(`product.name.ilike.%${search}%,client.full_name.ilike.%${search}%`);
+  if (error || !sale) {
+    return { error: 'Sale not found' };
   }
 
-  const { data, error, count } = await query;
+  const receiptData: ReceiptData = {
+    id: sale.id,
+    date: sale.created_at,
+    productName: (sale.product as unknown as { name: string }).name,
+    clientName: (sale.client as unknown as { full_name: string }).full_name,
+    clientPhone: (sale.client as unknown as { phone_number: string }).phone_number,
+    paymentMethod: sale.payment_method,
+    totalAmount: sale.total_amount,
+    installments: sale.installments?.map((i: { amount_due: number; due_date: string; is_paid: boolean }) => ({
+      amount: i.amount_due,
+      dueDate: i.due_date,
+      isPaid: i.is_paid,
+    })),
+  };
 
-  return { data: data || [], error, count };
-}
-
-export async function searchDebts(search?: string) {
-  const auth = await requireAuth();
-  if ('error' in auth) return { data: null, error: auth.error };
-  const supabase = auth.supabase;
-  let query = supabase
-    .from('installments')
-    .select(`
-      *,
-      sale:sales(
-        *,
-        product:products(*),
-        client:clients(*)
-      )
-    `)
-    .eq('is_paid', false)
-    .order('due_date', { ascending: true });
-
-  if (search) {
-    query = query.or(`sale.client.full_name.ilike.%${search}%`);
-  }
-
-  const { data, error } = await query;
-
-  return { data: data || [], error };
-}
-
-export async function markInstallmentPaid(installmentId: string) {
-  const auth = await requireAuth();
-  if ('error' in auth) return { data: null, error: auth.error };
-  const supabase = auth.supabase;
-  const { error } = await supabase
-    .from('installments')
-    .update({ is_paid: true, paid_at: new Date().toISOString() })
-    .eq('id', installmentId);
-
-  if (error) return { error: error.message };
-
-  // Check if all installments for this sale are paid
-  const { data: installments } = await supabase
-    .from('installments')
-    .select('sale_id, is_paid')
-    .eq('sale_id', (await supabase.from('installments').select('sale_id').eq('id', installmentId).single())?.data?.sale_id);
-
-  const allPaid = installments?.every((inst) => inst.is_paid);
-
-  if (allPaid) {
-    await supabase
-      .from('sales')
-      .update({ payment_status: 'paid' })
-      .eq('id', installments?.[0]?.sale_id);
-  }
-
-  return { data: null, error: null };
+  const html = generateReceiptHTML(receiptData);
+  return { data: html };
 }
