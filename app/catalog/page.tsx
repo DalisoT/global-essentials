@@ -30,7 +30,7 @@ export default async function CatalogPage() {
           </p>
 
           <Link
-            href="https://wa.me/"
+            href="https://wa.me/260980062299"
             target="_blank"
             className="inline-flex items-center gap-2 mt-6 px-6 py-3 rounded-2xl bg-tactical-neon text-black font-bold hover:bg-tactical-neon/90 transition-all hover:scale-105"
           >
@@ -77,7 +77,7 @@ export default async function CatalogPage() {
               Contact us directly and we&apos;ll help you find the perfect product for your needs.
             </p>
             <Link
-              href="https://wa.me/"
+              href="https://wa.me/260980062299"
               target="_blank"
               className="inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-tactical-neon text-black font-bold text-lg hover:bg-white transition-all hover:scale-105"
             >

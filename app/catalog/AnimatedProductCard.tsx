@@ -36,7 +36,7 @@ export function AnimatedProductCard({ product, index }: AnimatedProductCardProps
 
   const sendOrder = (productName: string, price: number) => {
     const message = `Hi! I'm interested in ordering:\n\n*${productName}*\nPrice: ${formatCurrency(price)}\n\nPlease let me know how to proceed.`;
-    return `https://wa.me/?text=${encodeURIComponent(message)}`;
+    return `https://wa.me/260980062299?text=${encodeURIComponent(message)}`;
   };
 
   const paginate = (newDirection: number) => {

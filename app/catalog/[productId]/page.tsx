@@ -24,7 +24,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
   const sendOrder = () => {
     const message = `Hi! I'm interested in ordering:\n\n*${typedProduct.name}*\nPrice: ${formatCurrency(typedProduct.selling_price)}\n\nPlease let me know how to proceed.`;
-    return `https://wa.me/?text=${encodeURIComponent(message)}`;
+    return `https://wa.me/260980062299?text=${encodeURIComponent(message)}`;
   };
 
   return (
