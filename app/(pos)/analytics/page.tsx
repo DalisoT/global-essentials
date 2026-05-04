@@ -23,9 +23,21 @@ import {
 
 const COLORS = ['#3b82f6', '#22ff66', '#f97316', '#ef4444', '#a855f7', '#ec4899'];
 
+import type { DashboardStats } from '@/lib/supabase-types';
+
+interface AnalyticsData {
+  totalRevenue: number;
+  totalExpenses: number;
+  netProfit: number;
+  revenueByDay: { date: string; amount: number }[];
+  expensesByCategory: { category: string; amount: number }[];
+  topProducts: { id: string; name: string; count: number; revenue: number }[];
+  monthlyData: { month: string; revenue: number; expenses: number }[];
+}
+
 export default function AnalyticsPage() {
-  const [data, setData] = useState<any>(null);
-  const [stats, setStats] = useState<any>(null);
+  const [data, setData] = useState<AnalyticsData | null>(null);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [aiQuery, setAiQuery] = useState('');
   const [aiResponse, setAiResponse] = useState<string | null>(null);

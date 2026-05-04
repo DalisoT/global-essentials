@@ -1,6 +1,6 @@
 'use server';
 
-import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { createServerSupabaseClient, requireAuth } from '@/lib/supabase-server';
 
 interface SearchResult {
   id: string;
@@ -13,7 +13,9 @@ interface SearchResult {
 export async function search(query: string): Promise<SearchResult[]> {
   if (!query || query.length < 2) return [];
 
-  const supabase = await createServerSupabaseClient();
+  const auth = await requireAuth();
+  if ('error' in auth) return [];
+  const supabase = auth.supabase;
   const results: SearchResult[] = [];
 
   // Search products

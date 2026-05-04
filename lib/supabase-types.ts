@@ -49,6 +49,22 @@ export interface Expense {
   updated_at: string;
 }
 
+export interface DashboardStats {
+  groundTruth: number;
+  inPipeline: number;
+  lowStockProducts: Product[];
+  recentSales: (Sale & { product?: Product; client?: Client })[];
+  upcomingInstallments: (Installment & { sale?: Sale & { client?: Client } })[];
+}
+
+export interface CatalogProduct {
+  id: string;
+  name: string;
+  selling_price: number;
+  image_url: string | null;
+  image_urls?: string[] | null;
+}
+
 export interface Database {
   public: {
     Tables: {

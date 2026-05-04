@@ -1,6 +1,7 @@
 'use server';
 
-import { supabase } from '@/lib/supabase';
+import { createServerSupabaseClient, requireAuth } from '@/lib/supabase-server';
+import { MIN_INSTALLMENT_MONTHS, MAX_INSTALLMENT_MONTHS } from '@/lib/config';
 
 export async function createSale({
   product_id,
@@ -13,6 +14,9 @@ export async function createSale({
   payment_method: 'cash' | 'pay-slow';
   installment_duration?: number;
 }) {
+  const auth = await requireAuth();
+  if ('error' in auth) return { data: null, error: auth.error };
+  const supabase = auth.supabase;
   // Validate input
   if (!product_id || typeof product_id !== 'string') {
     return { error: 'Invalid product_id' };
@@ -23,8 +27,8 @@ export async function createSale({
   if (!['cash', 'pay-slow'].includes(payment_method)) {
     return { error: 'Invalid payment method' };
   }
-  if (installment_duration !== undefined && (installment_duration < 2 || installment_duration > 60)) {
-    return { error: 'Installment duration must be between 2 and 60 months' };
+  if (installment_duration !== undefined && (installment_duration < MIN_INSTALLMENT_MONTHS || installment_duration > MAX_INSTALLMENT_MONTHS)) {
+    return { error: `Installment duration must be between ${MIN_INSTALLMENT_MONTHS} and ${MAX_INSTALLMENT_MONTHS} months` };
   }
 
   // Get product details
@@ -107,6 +111,9 @@ export async function createSale({
 }
 
 export async function getProducts() {
+  const auth = await requireAuth();
+  if ('error' in auth) return { data: null, error: auth.error };
+  const supabase = auth.supabase;
   const { data, error } = await supabase
     .from('products')
     .select('*')
@@ -116,6 +123,9 @@ export async function getProducts() {
 }
 
 export async function getClients() {
+  const auth = await requireAuth();
+  if ('error' in auth) return { data: null, error: auth.error };
+  const supabase = auth.supabase;
   const { data, error } = await supabase
     .from('clients')
     .select('*')
@@ -125,6 +135,9 @@ export async function getClients() {
 }
 
 export async function createClient(fullName: string, phoneNumber: string) {
+  const auth = await requireAuth();
+  if ('error' in auth) return { data: null, error: auth.error };
+  const supabase = auth.supabase;
   // Check if client exists
   const { data: existing } = await supabase
     .from('clients')
@@ -149,6 +162,9 @@ export async function createClient(fullName: string, phoneNumber: string) {
 }
 
 export async function deleteSale(saleId: string): Promise<{ error?: string }> {
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const supabase = auth.supabase;
   // Get the sale first
   const { data: sale, error: saleError } = await supabase
     .from('sales')
@@ -188,6 +204,9 @@ export async function editSale(
     payment_method?: 'cash' | 'pay-slow';
   }
 ): Promise<{ error?: string }> {
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const supabase = auth.supabase;
   const { error } = await supabase
     .from('sales')
     .update(updates)

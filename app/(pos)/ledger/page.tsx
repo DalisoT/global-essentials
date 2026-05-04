@@ -6,13 +6,13 @@ import { getSalesHistory } from '@/lib/actions/ledger';
 import { deleteSale, editSale } from '@/lib/actions/sales';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Search, DollarSign, BookOpen, Pencil, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react';
-import type { Sale } from '@/lib/appwrite-types';
+import type { Sale, Product, Client } from '@/lib/supabase-types';
 
 export default function LedgerPage() {
-  const [sales, setSales] = useState<any[]>([]);
+  const [sales, setSales] = useState<(Sale & { product?: Product; client?: Client })[]>([]);
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [editingSale, setEditingSale] = useState<any>(null);
+  const [editingSale, setEditingSale] = useState<(Sale & { product?: Product; client?: Client }) | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);

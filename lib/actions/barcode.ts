@@ -1,13 +1,15 @@
 'use server';
 
-import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { createServerSupabaseClient, requireAuth } from '@/lib/supabase-server';
 
 export async function lookupProductByBarcode(
   barcode: string
 ): Promise<{ data?: { id: string; name: string; selling_price: number; stock_level: number }; error?: string }> {
   if (!barcode) return { error: 'Barcode is required' };
 
-  const supabase = await createServerSupabaseClient();
+  const auth = await requireAuth();
+  if ('error' in auth) return { data: undefined, error: auth.error };
+  const supabase = auth.supabase;
 
   // First check product_variants for barcode
   const { data: variant } = await supabase

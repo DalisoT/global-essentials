@@ -27,3 +27,15 @@ export async function createServerSupabaseClient() {
     }
   );
 }
+
+export async function requireAuth(): Promise<{ supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>; userId: string } | { error: string; supabase?: never; userId?: never }> {
+  const supabase = await createServerSupabaseClient();
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: 'Unauthorized' };
+  }
+
+  return { supabase, userId: user.id };
+}

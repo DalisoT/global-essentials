@@ -8,11 +8,12 @@ import { formatCurrency, getWhatsAppLink } from '@/lib/utils';
 import { PaymentTimeline } from '@/components/PaymentTimeline';
 import { User, Phone, ArrowLeft, MessageCircle, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { ClientHistory } from '@/lib/actions/clients';
 
 export default function ClientDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const [history, setHistory] = useState<any>(null);
+  const [history, setHistory] = useState<ClientHistory | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {

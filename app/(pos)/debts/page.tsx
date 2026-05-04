@@ -7,10 +7,11 @@ import { generatePaymentReminder } from '@/lib/actions/ai';
 import { formatCurrency, formatDateShort, isOverdue, getWhatsAppLink } from '@/lib/utils';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { Search, Clock, CheckCircle, MessageCircle, AlertTriangle, Sparkles, Loader2, Bell, BellOff } from 'lucide-react';
-import type { Installment } from '@/lib/appwrite-types';
+import type { Installment } from '@/lib/supabase-types';
+import type { Sale, Product, Client } from '@/lib/supabase-types';
 
 export default function DebtsPage() {
-  const [debts, setDebts] = useState<any[]>([]);
+  const [debts, setDebts] = useState<(Installment & { sale?: Sale & { product?: Product; client?: Client } })[]>([]);
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [generatingReminder, setGeneratingReminder] = useState<string | null>(null);

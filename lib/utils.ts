@@ -1,12 +1,13 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { CURRENCY_LOCALE, CURRENCY_SYMBOL, LOW_STOCK_THRESHOLD, MIN_INSTALLMENT_MONTHS, MAX_INSTALLMENT_MONTHS } from './config';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
 export function formatCurrency(amount: number): string {
-  return 'K' + new Intl.NumberFormat('en-ZM', {
+  return CURRENCY_SYMBOL + new Intl.NumberFormat(CURRENCY_LOCALE, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);
@@ -38,7 +39,7 @@ export function getWhatsAppLink(phone: string, message: string): string {
 }
 
 export function getInventoryAlertThreshold(): number {
-  return 5;
+  return LOW_STOCK_THRESHOLD;
 }
 
 export function calculateInstallmentAmount(

@@ -17,7 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Product, Client } from '@/lib/appwrite-types';
+import type { Product, Client } from '@/lib/supabase-types';
 
 export default function NewSalePage() {
   const router = useRouter();

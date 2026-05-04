@@ -10,6 +10,19 @@ interface ReceiptModalProps {
   onClose: () => void;
 }
 
+function sanitizeHTML(html: string): string {
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/\s+on\w+="[^"]*"/gi, '')
+    .replace(/\s+on\w+='[^']*'/gi, '')
+    .replace(/javascript:/gi, '')
+    .replace(/<iframe/gi, '&lt;iframe')
+    .replace(/<object/gi, '&lt;object')
+    .replace(/<embed/gi, '&lt;embed')
+    .replace(/<link/gi, '&lt;link')
+    .replace(/<form/gi, '&lt;form');
+}
+
 export function ReceiptModal({ html, onClose }: ReceiptModalProps) {
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -19,7 +32,7 @@ export function ReceiptModal({ html, onClose }: ReceiptModalProps) {
   });
 
   const handleDownload = () => {
-    const blob = new Blob([html], { type: 'text/html' });
+    const blob = new Blob([sanitizedHTML], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -28,6 +41,8 @@ export function ReceiptModal({ html, onClose }: ReceiptModalProps) {
     URL.revokeObjectURL(url);
     toast.success('Receipt downloaded');
   };
+
+  const sanitizedHTML = sanitizeHTML(html);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
@@ -47,7 +62,7 @@ export function ReceiptModal({ html, onClose }: ReceiptModalProps) {
         <div
           ref={contentRef}
           className="p-4 max-h-96 overflow-y-auto [&_*]:text-black [&_*]:bg-white"
-          dangerouslySetInnerHTML={{ __html: html }}
+          dangerouslySetInnerHTML={{ __html: sanitizedHTML }}
         />
 
         {/* Actions */}

@@ -1,6 +1,6 @@
 'use server';
 
-import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { createServerSupabaseClient, requireAuth } from '@/lib/supabase-server';
 
 interface SalesVelocity {
   product_id: string;
@@ -20,7 +20,9 @@ const SAFETY_STOCK = 5;
 export async function getSalesVelocity(
   days: number = 90
 ): Promise<{ data?: SalesVelocity[]; error?: string }> {
-  const supabase = await createServerSupabaseClient();
+  const auth = await requireAuth();
+  if ('error' in auth) return { data: undefined, error: auth.error };
+  const supabase = auth.supabase;
 
   // Get sales data for the period
   const startDate = new Date();

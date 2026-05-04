@@ -1,6 +1,6 @@
 'use server';
 
-import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { createServerSupabaseClient, requireAuth } from '@/lib/supabase-server';
 
 type TableName = 'products' | 'clients' | 'sales' | 'expenses';
 
@@ -8,7 +8,9 @@ export async function softDelete(
   table: TableName,
   id: string
 ): Promise<{ error?: string }> {
-  const supabase = await createServerSupabaseClient();
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const supabase = auth.supabase;
 
   const { error } = await supabase
     .from(table)
@@ -23,7 +25,9 @@ export async function restore(
   table: TableName,
   id: string
 ): Promise<{ error?: string }> {
-  const supabase = await createServerSupabaseClient();
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const supabase = auth.supabase;
 
   const { error } = await supabase
     .from(table)
@@ -38,7 +42,9 @@ export async function purgeOldDeleted(
   table: TableName,
   daysOld: number = 30
 ): Promise<{ deleted: number; error?: string }> {
-  const supabase = await createServerSupabaseClient();
+  const auth = await requireAuth();
+  if ('error' in auth) return { deleted: 0, error: auth.error };
+  const supabase = auth.supabase;
 
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - daysOld);

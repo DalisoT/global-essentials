@@ -1,6 +1,6 @@
 'use server';
 
-import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { createServerSupabaseClient, requireAuth } from '@/lib/supabase-server';
 
 interface PaymentEvent {
   id: string;
@@ -12,7 +12,7 @@ interface PaymentEvent {
   dueDate?: string;
 }
 
-interface ClientHistory {
+export interface ClientHistory {
   client: {
     id: string;
     full_name: string;
@@ -45,7 +45,9 @@ interface ClientHistory {
 export async function getClientHistory(
   clientId: string
 ): Promise<{ data?: ClientHistory; error?: string }> {
-  const supabase = await createServerSupabaseClient();
+  const auth = await requireAuth();
+  if ('error' in auth) return { data: null, error: auth.error };
+  const supabase = auth.supabase;
 
   // Get client
   const { data: client, error: clientError } = await supabase
@@ -143,7 +145,9 @@ export async function getClientHistory(
 }
 
 export async function getClientsList() {
-  const supabase = await createServerSupabaseClient();
+  const auth = await requireAuth();
+  if ('error' in auth) return { data: null, error: auth.error };
+  const supabase = auth.supabase;
   const { data, error } = await supabase
     .from('clients')
     .select('id, full_name, phone_number, created_at')

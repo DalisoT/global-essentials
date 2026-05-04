@@ -1,3 +1,5 @@
+import { FALLBACK_EXCHANGE_RATES } from '../config';
+
 const EXCHANGE_RATE_API = 'https://api.exchangerate-api.com/v4/latest/ZMW';
 
 export interface ExchangeRates {
@@ -68,16 +70,8 @@ export async function fetchExchangeRates(): Promise<ExchangeRates> {
       }
     }
 
-    // Fallback to hardcoded rates (as of 2024)
-    return {
-      ZMW: 1,
-      USD: 0.042,
-      EUR: 0.038,
-      GBP: 0.033,
-      BWP: 0.58,
-      ZAR: 0.79,
-      UGX: 155,
-    };
+    // Fallback to configured rates
+    return { ...FALLBACK_EXCHANGE_RATES };
   }
 }
 

@@ -1,6 +1,6 @@
 'use server';
 
-import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { createServerSupabaseClient, requireAuth } from '@/lib/supabase-server';
 
 interface ProductVariant {
   id: string;
@@ -15,7 +15,9 @@ interface ProductVariant {
 }
 
 export async function getVariants(productId: string): Promise<{ data?: ProductVariant[]; error?: string }> {
-  const supabase = await createServerSupabaseClient();
+  const auth = await requireAuth();
+  if ('error' in auth) return { data: undefined, error: auth.error };
+  const supabase = auth.supabase;
 
   const { data, error } = await supabase
     .from('product_variants')
@@ -36,7 +38,9 @@ export async function createVariant(variant: {
   stock_level: number;
   price_modifier?: number;
 }): Promise<{ data?: ProductVariant; error?: string }> {
-  const supabase = await createServerSupabaseClient();
+  const auth = await requireAuth();
+  if ('error' in auth) return { data: undefined, error: auth.error };
+  const supabase = auth.supabase;
 
   const { data, error } = await supabase
     .from('product_variants')
@@ -67,7 +71,9 @@ export async function updateVariant(
     price_modifier?: number;
   }
 ): Promise<{ data?: ProductVariant; error?: string }> {
-  const supabase = await createServerSupabaseClient();
+  const auth = await requireAuth();
+  if ('error' in auth) return { data: undefined, error: auth.error };
+  const supabase = auth.supabase;
 
   const { data, error } = await supabase
     .from('product_variants')
@@ -81,7 +87,9 @@ export async function updateVariant(
 }
 
 export async function deleteVariant(id: string): Promise<{ error?: string }> {
-  const supabase = await createServerSupabaseClient();
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const supabase = auth.supabase;
 
   const { error } = await supabase
     .from('product_variants')
@@ -96,7 +104,9 @@ export async function getVariantByBarcode(barcode: string): Promise<{
   data?: { id: string; product_id: string; sku: string; stock_level: number; price_modifier: number; product: { name: string; selling_price: number } };
   error?: string;
 }> {
-  const supabase = await createServerSupabaseClient();
+  const auth = await requireAuth();
+  if ('error' in auth) return { data: undefined, error: auth.error };
+  const supabase = auth.supabase;
 
   const { data, error } = await supabase
     .from('product_variants')

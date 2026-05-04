@@ -5,6 +5,7 @@ import { formatCurrency } from '@/lib/utils';
 import { ArrowLeft, MessageCircle, Check, Star, Shield, Truck } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { ProductImageCarousel } from './ProductImageCarousel';
+import type { CatalogProductWithImages } from '@/lib/actions/catalog';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,8 +20,10 @@ export default async function ProductPage({ params }: ProductPageProps) {
     notFound();
   }
 
+  const typedProduct = product as CatalogProductWithImages;
+
   const sendOrder = () => {
-    const message = `Hi! I'm interested in ordering:\n\n*${product.name}*\nPrice: ${formatCurrency(product.selling_price)}\n\nPlease let me know how to proceed.`;
+    const message = `Hi! I'm interested in ordering:\n\n*${typedProduct.name}*\nPrice: ${formatCurrency(typedProduct.selling_price)}\n\nPlease let me know how to proceed.`;
     return `https://wa.me/?text=${encodeURIComponent(message)}`;
   };
 
@@ -51,8 +54,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
         animate={{ opacity: 1 }}
         transition={{ duration: 0.6 }}
       >
-        {(product as any).images?.length ? (
-          <ProductImageCarousel images={(product as any).images} productName={product.name} />
+        {typedProduct.images?.length ? (
+          <ProductImageCarousel images={typedProduct.images} productName={typedProduct.name} />
         ) : (
           <motion.div
             className="w-full h-full bg-gradient-to-br from-white/5 to-white/10 flex items-center justify-center"

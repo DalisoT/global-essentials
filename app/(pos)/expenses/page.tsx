@@ -6,16 +6,16 @@ import { getExpenses, createExpense, updateExpense, deleteExpense, getExpenseSta
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Search, Plus, X, Pencil, Trash2, TrendingUp, Wallet, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Expense } from '@/lib/appwrite-types';
+import type { Expense } from '@/lib/supabase-types';
 
 const CATEGORIES = ['Supplies', 'Rent', 'Utilities', 'Transport', 'Marketing', 'Salary', 'Other'];
 
 export default function ExpensesPage() {
-  const [expenses, setExpenses] = useState<any[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [stats, setStats] = useState({ total: 0, byCategory: {}, last7DaysTotal: 0, count: 0 });
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [editingExpense, setEditingExpense] = useState<any>(null);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);

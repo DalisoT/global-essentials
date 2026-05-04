@@ -8,7 +8,11 @@ import {
   Clock,
   ArrowUpRight,
 } from 'lucide-react';
-import type { Sale, Product, Installment } from '@/lib/appwrite-types';
+import type { Sale, Product, Installment, Client } from '@/lib/supabase-types';
+import type { Sale as SaleWithRelations, Installment as InstallmentWithRelations } from '@/lib/actions/dashboard';
+
+type SaleWithProductAndClient = Sale & { product?: Product; client?: Client };
+type InstallmentWithSaleAndClient = Installment & { sale?: Sale & { client?: Client } };
 
 export default async function DashboardPage() {
   const result = await getDashboardStats();
@@ -144,9 +148,9 @@ export default async function DashboardPage() {
                     <DollarSign className="w-5 h-5 text-tactical-blue" />
                   </div>
                   <div>
-                    <p className="font-semibold text-sm">{(sale.product as any)?.name}</p>
+                    <p className="font-semibold text-sm">{sale.product?.name}</p>
                     <p className="text-xs text-white/40">
-                      {(sale.client as any)?.full_name}
+                      {sale.client?.full_name}
                     </p>
                   </div>
                 </div>
@@ -188,7 +192,7 @@ export default async function DashboardPage() {
                   </div>
                   <div>
                     <p className="font-semibold text-sm">
-                      {(inst.sale as any)?.client?.full_name}
+                      {inst.sale?.client?.full_name}
                     </p>
                     <p className="text-xs text-white/40">
                       Due: {new Date(inst.due_date).toLocaleDateString()}

@@ -1,8 +1,11 @@
 'use server';
 
-import { supabase } from '@/lib/supabase';
+import { createServerSupabaseClient, requireAuth } from '@/lib/supabase-server';
 
 export async function getInventory(options?: { limit?: number; offset?: number }) {
+  const auth = await requireAuth();
+  if ('error' in auth) return { data: [], error: auth.error };
+  const supabase = auth.supabase;
   const limit = options?.limit ?? 50;
   const offset = options?.offset ?? 0;
 
@@ -20,8 +23,11 @@ export async function createProduct(product: {
   cost_price: number;
   selling_price: number;
   stock_level: number;
-  image_url?: string;
+  image_urls?: string[];
 }) {
+  const auth = await requireAuth();
+  if ('error' in auth) return { data: null, error: auth.error };
+  const supabase = auth.supabase;
   const { data, error } = await supabase
     .from('products')
     .insert([{
@@ -29,7 +35,7 @@ export async function createProduct(product: {
       cost_price: product.cost_price,
       selling_price: product.selling_price,
       stock_level: product.stock_level,
-      image_url: product.image_url || null,
+      image_urls: product.image_urls || null,
     }])
     .select()
     .single();
@@ -44,9 +50,12 @@ export async function updateProduct(
     cost_price?: number;
     selling_price?: number;
     stock_level?: number;
-    image_url?: string;
+    image_urls?: string[];
   }
 ) {
+  const auth = await requireAuth();
+  if ('error' in auth) return { data: null, error: auth.error };
+  const supabase = auth.supabase;
   const { data, error } = await supabase
     .from('products')
     .update(product)
@@ -58,11 +67,36 @@ export async function updateProduct(
 }
 
 export async function deleteProduct(id: string) {
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const supabase = auth.supabase;
   const { error } = await supabase.from('products').delete().eq('id', id);
   return { error };
 }
 
-export async function uploadProductImage(imageData: string) {
+export async function uploadProductImages(imageDataArray: string[]) {
+  const auth = await requireAuth();
+  if ('error' in auth) return { data: null, error: auth.error };
+  const supabase = auth.supabase;
+  const uploadedUrls: string[] = [];
+
+  for (const imageData of imageDataArray) {
+    const result = await uploadProductImage(imageData, supabase);
+    if (result.error || !result.data) {
+      return { data: null, error: result.error || 'Upload failed' };
+    }
+    uploadedUrls.push(result.data);
+  }
+
+  return { data: uploadedUrls, error: null };
+}
+
+export async function uploadProductImage(imageData: string, supabase?: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
+  if (!supabase) {
+    const auth = await requireAuth();
+    if ('error' in auth) return { data: null, error: auth.error };
+    supabase = auth.supabase;
+  }
   try {
     const matches = imageData.match(/^data:([^;]+);base64,(.+)$/);
     if (!matches) {

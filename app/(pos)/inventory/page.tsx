@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
-import { getInventory, createProduct, updateProduct, deleteProduct, uploadProductImage } from '@/lib/actions/inventory';
+import { getInventory, createProduct, updateProduct, deleteProduct, uploadProductImages } from '@/lib/actions/inventory';
 import { formatCurrency } from '@/lib/utils';
 import { Package, Plus, X, Pencil, Trash2, Search, ImagePlus, Upload, XCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Product } from '@/lib/appwrite-types';
+import type { Product } from '@/lib/supabase-types';
 
 export default function InventoryPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -23,10 +23,10 @@ export default function InventoryPage() {
   const [costPrice, setCostPrice] = useState('');
   const [sellingPrice, setSellingPrice] = useState('');
   const [stockLevel, setStockLevel] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -49,9 +49,10 @@ export default function InventoryPage() {
     setCostPrice('');
     setSellingPrice('');
     setStockLevel('');
-    setImageUrl('');
-    setImageFile(null);
-    setImagePreview(null);
+    setImageUrls([]);
+    setImageFiles([]);
+    imagePreviews.forEach((url) => URL.revokeObjectURL(url));
+    setImagePreviews([]);
     setEditingProduct(null);
   };
 
@@ -66,9 +67,15 @@ export default function InventoryPage() {
     setCostPrice(product.cost_price.toString());
     setSellingPrice(product.selling_price.toString());
     setStockLevel(product.stock_level.toString());
-    setImageUrl(product.image_url || '');
-    setImageFile(null);
-    setImagePreview(null);
+    const existingUrls = product.image_urls && product.image_urls.length > 0
+      ? product.image_urls
+      : product.image_url
+        ? [product.image_url]
+        : [];
+    setImageUrls(existingUrls);
+    setImageFiles([]);
+    imagePreviews.forEach((url) => URL.revokeObjectURL(url));
+    setImagePreviews([]);
     setShowModal(true);
   };
 
@@ -80,26 +87,31 @@ export default function InventoryPage() {
 
     setIsSubmitting(true);
 
-    let finalImageUrl = imageUrl;
+    let finalImageUrls = [...imageUrls];
 
-    if (imageFile) {
-      setIsUploadingImage(true);
-      const reader = new FileReader();
-      const imageData = await new Promise<string>((resolve, reject) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(imageFile);
-      });
-      const { data: uploadedUrl, error: uploadError } = await uploadProductImage(imageData);
-      setIsUploadingImage(false);
+    if (imageFiles.length > 0) {
+      setIsUploadingImages(true);
+      const imageDataArray = await Promise.all(
+        imageFiles.map(
+          (file) =>
+            new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+            })
+        )
+      );
+      const { data: uploadedUrls, error: uploadError } = await uploadProductImages(imageDataArray);
+      setIsUploadingImages(false);
 
       if (uploadError) {
-        toast.error('Failed to upload image');
+        toast.error('Failed to upload images');
         setIsSubmitting(false);
         return;
       }
 
-      finalImageUrl = uploadedUrl!;
+      finalImageUrls = [...finalImageUrls, ...(uploadedUrls || [])];
     }
 
     const productData = {
@@ -107,7 +119,7 @@ export default function InventoryPage() {
       cost_price: parseFloat(costPrice),
       selling_price: parseFloat(sellingPrice),
       stock_level: parseInt(stockLevel),
-      image_url: finalImageUrl || undefined,
+      image_urls: finalImageUrls.length > 0 ? finalImageUrls : undefined,
     };
 
     const { error } = editingProduct
@@ -126,47 +138,55 @@ export default function InventoryPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this product?')) return;
-
-    const { error } = await deleteProduct(id);
-    if (error) {
-      toast.error('Failed to delete product');
-    } else {
-      toast.success('Product deleted');
-      loadProducts();
-    }
-  };
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
 
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    if (!allowedTypes.includes(file.type)) {
-      toast.error('Invalid file type. Use JPEG, PNG, WebP, or GIF.');
-      return;
+
+    for (const file of files) {
+      if (!allowedTypes.includes(file.type)) {
+        toast.error('Invalid file type. Use JPEG, PNG, WebP, or GIF.');
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('File too large. Max 5MB per image.');
+        return;
+      }
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('File too large. Max 5MB.');
-      return;
-    }
+    const newFiles = [...imageFiles, ...files];
+    setImageFiles(newFiles);
 
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
-    setImageUrl('');
+    const newPreviews = files.map((file) => URL.createObjectURL(file));
+    setImagePreviews((prev) => [...prev, ...newPreviews]);
   };
 
-  const clearImageFile = () => {
-    setImageFile(null);
-    if (imagePreview) URL.revokeObjectURL(imagePreview);
-    setImagePreview(null);
+  const removeImage = (index: number) => {
+    const isExisting = index < imageUrls.length;
+    if (isExisting) {
+      setImageUrls(imageUrls.filter((_, i) => i !== index));
+    } else {
+      const previewIndex = index - imageUrls.length;
+      const urlToRevoke = imagePreviews[previewIndex];
+      URL.revokeObjectURL(urlToRevoke);
+      setImageFiles((prev) => prev.filter((_, i) => i !== previewIndex));
+      setImagePreviews((prev) => prev.filter((_, i) => i !== previewIndex));
+    }
+  };
+
+  const clearAllImages = () => {
+    setImageFiles([]);
+    imagePreviews.forEach((url) => URL.revokeObjectURL(url));
+    setImagePreviews([]);
+    setImageUrls([]);
   };
 
   const filteredProducts = products.filter((p) =>
     p.name.toLowerCase().includes(search.toLowerCase())
   );
+
+  const allImageUrls = [...imageUrls, ...imagePreviews];
 
   return (
     <div className="space-y-6">
@@ -225,69 +245,80 @@ export default function InventoryPage() {
 
       {/* Products Grid */}
       <div className="grid grid-cols-2 gap-4">
-        {filteredProducts.map((product) => (
-          <div
-            key={product.id}
-            className={cn(
-              'card-tactical',
-              product.stock_level <= 5 && product.stock_level > 0 && 'border-tactical-orange',
-              product.stock_level === 0 && 'border-tactical-red opacity-60'
-            )}
-          >
-            {/* Image */}
-            <div className="w-full aspect-square rounded-xl bg-white/5 mb-3 flex items-center justify-center overflow-hidden">
-              {product.image_url ? (
-                <img
-                  src={product.image_url}
-                  alt={product.name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <Package className="w-12 h-12 text-white/20" />
+        {filteredProducts.map((product) => {
+          const productImageUrls = product.image_urls || [];
+          const firstImage = productImageUrls[0] || product.image_url;
+          return (
+            <div
+              key={product.id}
+              className={cn(
+                'card-tactical',
+                product.stock_level <= 5 && product.stock_level > 0 && 'border-tactical-orange',
+                product.stock_level === 0 && 'border-tactical-red opacity-60'
               )}
-            </div>
+            >
+              {/* Image */}
+              <div className="w-full aspect-square rounded-xl bg-white/5 mb-3 flex items-center justify-center overflow-hidden relative">
+                {firstImage ? (
+                  <>
+                    <img
+                      src={firstImage}
+                      alt={product.name}
+                      className="w-full h-full object-cover"
+                    />
+                    {productImageUrls.length > 1 && (
+                      <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded-full">
+                        +{productImageUrls.length - 1}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <Package className="w-12 h-12 text-white/20" />
+                )}
+              </div>
 
-            {/* Info */}
-            <div className="space-y-1 mb-3">
-              <p className="font-bold text-sm truncate">{product.name}</p>
-              <p className="text-lg font-black text-tactical-neon">
-                {formatCurrency(product.selling_price)}
-              </p>
-              <div className="flex items-center justify-between">
-                <span
-                  className={`text-xs font-bold uppercase tracking-wide ${
-                    product.stock_level === 0
-                      ? 'text-tactical-red'
-                      : product.stock_level <= 5
-                      ? 'text-tactical-orange'
-                      : 'text-white/40'
-                  }`}
+              {/* Info */}
+              <div className="space-y-1 mb-3">
+                <p className="font-bold text-sm truncate">{product.name}</p>
+                <p className="text-lg font-black text-tactical-neon">
+                  {formatCurrency(product.selling_price)}
+                </p>
+                <div className="flex items-center justify-between">
+                  <span
+                    className={`text-xs font-bold uppercase tracking-wide ${
+                      product.stock_level === 0
+                        ? 'text-tactical-red'
+                        : product.stock_level <= 5
+                        ? 'text-tactical-orange'
+                        : 'text-white/40'
+                    }`}
+                  >
+                    Stock: {product.stock_level}
+                  </span>
+                  <span className="text-xs text-white/30">
+                    Cost: {formatCurrency(product.cost_price)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => openEdit(product)}
+                  className="flex-1 p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
                 >
-                  Stock: {product.stock_level}
-                </span>
-                <span className="text-xs text-white/30">
-                  Cost: {formatCurrency(product.cost_price)}
-                </span>
+                  <Pencil className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleDelete(product.id)}
+                  className="flex-1 p-2 rounded-lg bg-tactical-red/10 hover:bg-tactical-red/20 text-tactical-red transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
             </div>
-
-            {/* Actions */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => openEdit(product)}
-                className="flex-1 p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
-              >
-                <Pencil className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => handleDelete(product.id)}
-                className="flex-1 p-2 rounded-lg bg-tactical-red/10 hover:bg-tactical-red/20 text-tactical-red transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Create/Edit Modal */}
@@ -359,86 +390,67 @@ export default function InventoryPage() {
 
               <div>
                 <label className="text-xs font-bold uppercase tracking-wider text-white/60 mb-2 block">
-                  Product Image
+                  Product Images
                 </label>
 
-                {/* Hidden file input */}
+                {/* Hidden file input - multiple */}
                 <input
                   ref={fileInputRef}
                   type="file"
                   accept="image/jpeg,image/png,image/webp,image/gif"
+                  multiple
                   onChange={handleFileChange}
                   className="hidden"
                 />
 
-                {/* Image Preview */}
-                {(imagePreview || imageUrl) && (
-                  <div className="relative mb-3 w-full aspect-square rounded-xl overflow-hidden bg-white/5">
-                    <img
-                      src={imagePreview || imageUrl}
-                      alt="Preview"
-                      className="w-full h-full object-cover"
-                    />
-                    <button
-                      type="button"
-                      onClick={clearImageFile}
-                      className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 flex items-center justify-center text-white/80 hover:text-white"
-                    >
-                      <XCircle className="w-5 h-5" />
-                    </button>
+                {/* Image Previews Grid */}
+                {allImageUrls.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    {allImageUrls.map((url, index) => (
+                      <div key={index} className="relative aspect-square rounded-xl overflow-hidden bg-white/5">
+                        <img
+                          src={url}
+                          alt={`Image ${index + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeImage(index)}
+                          className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white/80 hover:text-white"
+                        >
+                          <XCircle className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
 
-                {/* Upload or URL Toggle */}
-                {!imagePreview && !imageUrl && (
-                  <div className="space-y-3">
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-full h-14 flex items-center justify-center gap-2 bg-white/5 border border-white/10 border-dashed rounded-xl text-white/60 hover:text-white hover:border-tactical-blue transition-colors"
-                    >
-                      <ImagePlus className="w-5 h-5" />
-                      <span>Upload from Gallery</span>
-                    </button>
+                {/* Upload button */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full h-14 flex items-center justify-center gap-2 bg-white/5 border border-white/10 border-dashed rounded-xl text-white/60 hover:text-white hover:border-tactical-blue transition-colors"
+                >
+                  <ImagePlus className="w-5 h-5" />
+                  <span>Add Images</span>
+                </button>
 
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-px bg-white/10" />
-                      <span className="text-xs text-white/30 uppercase">or</span>
-                      <div className="flex-1 h-px bg-white/10" />
-                    </div>
-
-                    <input
-                      type="url"
-                      value={imageUrl}
-                      onChange={(e) => setImageUrl(e.target.value)}
-                      placeholder="Paste image URL"
-                      className="w-full h-14 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/40 focus:outline-none focus:border-tactical-blue"
-                    />
-                  </div>
-                )}
-
-                {/* Change image button when preview/url exists */}
-                {(imagePreview || imageUrl) && (
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full h-12 flex items-center justify-center gap-2 bg-white/5 border border-white/10 rounded-xl text-white/60 hover:text-white hover:border-tactical-blue transition-colors"
-                  >
-                    <Upload className="w-4 h-4" />
-                    <span className="text-sm">Change Image</span>
-                  </button>
+                {allImageUrls.length === 0 && (
+                  <p className="text-xs text-white/30 text-center mt-1">
+                    Upload multiple photos (JPEG, PNG, WebP, GIF up to 5MB each)
+                  </p>
                 )}
               </div>
             </div>
 
             <button
               onClick={handleSubmit}
-              disabled={isSubmitting || isUploadingImage}
+              disabled={isSubmitting || isUploadingImages}
               className="w-full btn-tactical"
             >
-              {isSubmitting || isUploadingImage
-                ? isUploadingImage
-                  ? 'Uploading Image...'
+              {isSubmitting || isUploadingImages
+                ? isUploadingImages
+                  ? 'Uploading Images...'
                   : 'Saving...'
                 : editingProduct
                   ? 'Update Product'

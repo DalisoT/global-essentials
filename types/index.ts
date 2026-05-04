@@ -8,9 +8,10 @@ export type {
   Tables,
   InsertTables,
   UpdateTables,
+  DashboardStats,
+  CatalogProduct,
 } from '@/lib/supabase-types';
 
 export type {
-  DashboardStats,
-  CatalogProduct,
-} from '@/lib/appwrite-types';
+  CatalogProductWithImages,
+} from '@/lib/actions/catalog';

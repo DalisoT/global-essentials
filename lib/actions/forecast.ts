@@ -1,6 +1,7 @@
 'use server';
 
-import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { createServerSupabaseClient, requireAuth } from '@/lib/supabase-server';
+import { DEFAULT_LEAD_TIME_DAYS, DEFAULT_SAFETY_STOCK } from '@/lib/config';
 
 interface DayForecast {
   date: string;
@@ -19,9 +20,11 @@ interface CashFlowForecast {
 }
 
 export async function getCashFlowForecast(
-  days: number = 30
+  days: number = DEFAULT_LEAD_TIME_DAYS
 ): Promise<{ data?: CashFlowForecast; error?: string }> {
-  const supabase = await createServerSupabaseClient();
+  const auth = await requireAuth();
+  if ('error' in auth) return { data: undefined, error: auth.error };
+  const supabase = auth.supabase;
 
   // Get confirmed installments in the forecast period
   const today = new Date();

@@ -1,8 +1,14 @@
 'use server';
 
-import { supabase } from '@/lib/supabase';
+import type { Sale, Expense, Installment } from '@/lib/supabase-types';
 
-export function generateSalesCSV(sales: any[]): string {
+interface DebtWithRelations {
+  amount_due: number;
+  due_date: string;
+  sale?: Sale & { product?: { name: string }; client?: { full_name: string } };
+}
+
+export function generateSalesCSV(sales: (Sale & { product?: { name: string }; client?: { full_name: string } })[]): string {
   const headers = ['Date', 'Product', 'Client', 'Amount', 'Payment Status', 'Payment Method'];
   const rows = sales.map((sale) => [
     new Date(sale.created_at).toLocaleDateString(),
@@ -16,7 +22,7 @@ export function generateSalesCSV(sales: any[]): string {
   return [headers, ...rows].map((row) => row.join(',')).join('\n');
 }
 
-export function generateExpensesCSV(expenses: any[]): string {
+export function generateExpensesCSV(expenses: Expense[]): string {
   const headers = ['Date', 'Description', 'Category', 'Amount'];
   const rows = expenses.map((exp) => [
     new Date(exp.created_at).toLocaleDateString(),
@@ -28,7 +34,7 @@ export function generateExpensesCSV(expenses: any[]): string {
   return [headers, ...rows].map((row) => row.join(',')).join('\n');
 }
 
-export function generateDebtsCSV(debts: any[]): string {
+export function generateDebtsCSV(debts: DebtWithRelations[]): string {
   const headers = ['Client', 'Product', 'Amount Due', 'Due Date', 'Status'];
   const rows = debts.map((debt) => [
     debt.sale?.client?.full_name || 'N/A',

@@ -1,6 +1,6 @@
 'use server';
 
-import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { createServerSupabaseClient, requireAuth } from '@/lib/supabase-server';
 
 export interface ImportResult {
   success: number;
@@ -17,7 +17,9 @@ export async function importProducts(
     barcode?: string;
   }>
 ): Promise<ImportResult> {
-  const supabase = await createServerSupabaseClient();
+  const auth = await requireAuth();
+  if ('error' in auth) return { success: 0, failed: products.length, errors: [auth.error] };
+  const supabase = auth.supabase;
 
   const { error } = await supabase.from('products').insert(products);
 
@@ -35,7 +37,9 @@ export async function importExpenses(
     created_at?: string;
   }>
 ): Promise<ImportResult> {
-  const supabase = await createServerSupabaseClient();
+  const auth = await requireAuth();
+  if ('error' in auth) return { success: 0, failed: expenses.length, errors: [auth.error] };
+  const supabase = auth.supabase;
 
   const expensesWithDate = expenses.map((e) => ({
     ...e,
@@ -56,7 +60,9 @@ export async function importClients(
     phone_number: string;
   }>
 ): Promise<ImportResult> {
-  const supabase = await createServerSupabaseClient();
+  const auth = await requireAuth();
+  if ('error' in auth) return { success: 0, failed: clients.length, errors: [auth.error] };
+  const supabase = auth.supabase;
 
   const { error } = await supabase.from('clients').insert(clients);
 
