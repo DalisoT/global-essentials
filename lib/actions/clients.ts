@@ -46,7 +46,7 @@ export async function getClientHistory(
   clientId: string
 ): Promise<{ data?: ClientHistory; error?: string }> {
   const auth = await requireAuth();
-  if ('error' in auth) return { data: null, error: auth.error };
+  if ('error' in auth) return { error: auth.error };
   const supabase = auth.supabase;
 
   // Get client

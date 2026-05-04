@@ -5,7 +5,7 @@ import { generateReceiptHTML, type ReceiptData } from '@/lib/receipts/template';
 
 export async function getSaleReceipt(saleId: string): Promise<{ data?: string; error?: string }> {
   const auth = await requireAuth();
-  if ('error' in auth) return { data: null, error: auth.error };
+  if ('error' in auth) return { error: auth.error };
   const supabase = auth.supabase;
 
   const { data: sale, error } = await supabase

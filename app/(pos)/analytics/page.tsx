@@ -50,12 +50,20 @@ export default function AnalyticsPage() {
 
   const loadData = async () => {
     setIsLoading(true);
-    const [analyticsData, dashboardStats] = await Promise.all([
+    const [analyticsResult, dashboardStats] = await Promise.all([
       getAnalyticsData(),
       getDashboardStats(),
     ]);
-    setData(analyticsData);
-    setStats(dashboardStats);
+    // getAnalyticsData returns AnalyticsData on success, or { data: null, error: string } on failure
+    if ('totalRevenue' in analyticsResult) {
+      setData(analyticsResult);
+    } else {
+      setData(null);
+    }
+    // getDashboardStats returns { data?: DashboardStats; error?: string }
+    if (dashboardStats.data) {
+      setStats(dashboardStats.data);
+    }
     setIsLoading(false);
   };
 

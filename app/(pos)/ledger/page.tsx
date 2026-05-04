@@ -31,7 +31,7 @@ export default function LedgerPage() {
     setIsLoading(true);
     const offset = (page - 1) * PAGE_SIZE;
     const { data, count } = await getSalesHistory(search, { limit: PAGE_SIZE, offset });
-    setSales(data);
+    setSales(data || []);
     setTotalCount(count || 0);
     setIsLoading(false);
   };

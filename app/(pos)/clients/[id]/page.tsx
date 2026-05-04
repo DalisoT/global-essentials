@@ -26,7 +26,7 @@ export default function ClientDetailPage() {
         router.push('/ledger');
         return;
       }
-      setHistory(data);
+      setHistory(data ?? null);
       setIsLoading(false);
     });
   }, [params.id, router]);
