@@ -5,11 +5,21 @@ import { supabase } from '@/lib/supabase';
 export async function getCatalogProducts() {
   const { data, error } = await supabase
     .from('products')
-    .select('id, name, selling_price, image_url')
+    .select('id, name, selling_price, image_url, image_urls, stock_level, description')
     .gt('stock_level', 0)
     .order('name', { ascending: true });
 
-  return { data: data || [], error };
+  // Transform to use image_urls if available, with fallback to image_url
+  const products = (data || []).map((p: any) => ({
+    ...p,
+    images: p.image_urls && p.image_urls.length > 0
+      ? p.image_urls
+      : p.image_url
+        ? [p.image_url]
+        : [],
+  }));
+
+  return { data: products, error };
 }
 
 export async function getProductById(id: string) {
