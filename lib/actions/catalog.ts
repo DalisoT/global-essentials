@@ -1,6 +1,6 @@
 'use server';
 
-import { createServerSupabaseClient, requireAuth } from '@/lib/supabase-server';
+import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 export interface CatalogProductWithImages {
   id: string;
@@ -14,9 +14,7 @@ export interface CatalogProductWithImages {
 }
 
 export async function getCatalogProducts() {
-  const auth = await requireAuth();
-  if ('error' in auth) return { data: null, error: auth.error };
-  const supabase = auth.supabase;
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from('products')
     .select('id, name, selling_price, image_url, image_urls, stock_level, description')
@@ -37,9 +35,7 @@ export async function getCatalogProducts() {
 }
 
 export async function getProductById(id: string): Promise<{ data: CatalogProductWithImages | null; error: string | null }> {
-  const auth = await requireAuth();
-  if ('error' in auth) return { data: null, error: auth.error };
-  const supabase = auth.supabase;
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from('products')
     .select('id, name, selling_price, image_url, image_urls, stock_level')
