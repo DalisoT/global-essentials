@@ -7,6 +7,7 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 import { Search, Plus, X, Pencil, Trash2, TrendingUp, Wallet, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Expense } from '@/lib/supabase-types';
+import { Skeleton, SkeletonTable, EmptyState } from '@/components/ui/Skeleton';
 
 const CATEGORIES = ['Supplies', 'Rent', 'Utilities', 'Transport', 'Marketing', 'Salary', 'Other'];
 
@@ -17,6 +18,7 @@ export default function ExpensesPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const PAGE_SIZE = 50;
@@ -36,10 +38,12 @@ export default function ExpensesPage() {
   }, [search, page]);
 
   const loadExpenses = async () => {
+    setIsLoading(true);
     const offset = (page - 1) * PAGE_SIZE;
     const { data, count } = await getExpenses(search, { limit: PAGE_SIZE, offset });
     setExpenses(data || []);
     setTotalCount(count || 0);
+    setIsLoading(false);
   };
 
   const loadStats = async () => {
@@ -208,8 +212,16 @@ export default function ExpensesPage() {
             </div>
           )}
         </div>
-        {expenses.length === 0 ? (
-          <div className="card-tactical py-8 text-center text-white/40">No expenses recorded</div>
+        {isLoading ? (
+          <SkeletonTable rows={5} />
+        ) : expenses.length === 0 ? (
+          <EmptyState
+            icon={Wallet}
+            title={search ? 'No expenses found' : 'No expenses yet'}
+            description={search ? `No expenses match "${search}"` : 'Start tracking your business expenses'}
+            action={() => setShowModal(true)}
+            actionLabel="Add Expense"
+          />
         ) : (
           <div className="card-tactical divide-y divide-white/5">
             {expenses.map((expense) => (

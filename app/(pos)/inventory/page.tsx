@@ -7,6 +7,7 @@ import { formatCurrency } from '@/lib/utils';
 import { Package, Plus, X, Pencil, Trash2, Search, ImagePlus, Upload, XCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Product } from '@/lib/supabase-types';
+import { Skeleton, SkeletonCard, EmptyState } from '@/components/ui/Skeleton';
 
 export default function InventoryPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -14,6 +15,7 @@ export default function InventoryPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const PAGE_SIZE = 50;
@@ -38,10 +40,12 @@ export default function InventoryPage() {
   }, [page]);
 
   const loadProducts = async () => {
+    setIsLoading(true);
     const offset = (page - 1) * PAGE_SIZE;
     const { data, count } = await getInventory({ limit: PAGE_SIZE, offset });
     if (data) setProducts(data as unknown as Product[]);
     setTotalCount(count || 0);
+    setIsLoading(false);
   };
 
   const resetForm = () => {
@@ -244,82 +248,98 @@ export default function InventoryPage() {
       )}
 
       {/* Products Grid */}
-      <div className="grid grid-cols-2 gap-4">
-        {filteredProducts.map((product) => {
-          const productImageUrls = product.image_urls || [];
-          const firstImage = productImageUrls[0] || product.image_url;
-          return (
-            <div
-              key={product.id}
-              className={cn(
-                'card-tactical',
-                product.stock_level <= 5 && product.stock_level > 0 && 'border-tactical-orange',
-                product.stock_level === 0 && 'border-tactical-red opacity-60'
-              )}
-            >
-              {/* Image */}
-              <div className="w-full aspect-square rounded-xl bg-white/5 mb-3 flex items-center justify-center overflow-hidden relative">
-                {firstImage ? (
-                  <>
-                    <img
-                      src={firstImage}
-                      alt={product.name}
-                      className="w-full h-full object-cover"
-                    />
-                    {productImageUrls.length > 1 && (
-                      <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded-full">
-                        +{productImageUrls.length - 1}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <Package className="w-12 h-12 text-white/20" />
+      {isLoading ? (
+        <div className="grid grid-cols-2 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+      ) : filteredProducts.length === 0 ? (
+        <EmptyState
+          icon={Package}
+          title={search ? 'No products found' : 'No products yet'}
+          description={search ? `No products match "${search}"` : 'Add your first product to get started'}
+          action={openCreate}
+          actionLabel="Add Product"
+        />
+      ) : (
+        <div className="grid grid-cols-2 gap-4">
+          {filteredProducts.map((product) => {
+            const productImageUrls = product.image_urls || [];
+            const firstImage = productImageUrls[0] || product.image_url;
+            return (
+              <div
+                key={product.id}
+                className={cn(
+                  'card-tactical',
+                  product.stock_level <= 5 && product.stock_level > 0 && 'border-tactical-orange',
+                  product.stock_level === 0 && 'border-tactical-red opacity-60'
                 )}
-              </div>
+              >
+                {/* Image */}
+                <div className="w-full aspect-square rounded-xl bg-white/5 mb-3 flex items-center justify-center overflow-hidden relative">
+                  {firstImage ? (
+                    <>
+                      <img
+                        src={firstImage}
+                        alt={product.name}
+                        className="w-full h-full object-cover"
+                      />
+                      {productImageUrls.length > 1 && (
+                        <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded-full">
+                          +{productImageUrls.length - 1}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <Package className="w-12 h-12 text-white/20" />
+                  )}
+                </div>
 
-              {/* Info */}
-              <div className="space-y-1 mb-3">
-                <p className="font-bold text-sm truncate">{product.name}</p>
-                <p className="text-lg font-black text-tactical-neon">
-                  {formatCurrency(product.selling_price)}
-                </p>
-                <div className="flex items-center justify-between">
-                  <span
-                    className={`text-xs font-bold uppercase tracking-wide ${
-                      product.stock_level === 0
-                        ? 'text-tactical-red'
-                        : product.stock_level <= 5
-                        ? 'text-tactical-orange'
-                        : 'text-white/40'
-                    }`}
+                {/* Info */}
+                <div className="space-y-1 mb-3">
+                  <p className="font-bold text-sm truncate">{product.name}</p>
+                  <p className="text-lg font-black text-tactical-neon">
+                    {formatCurrency(product.selling_price)}
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <span
+                      className={`text-xs font-bold uppercase tracking-wide ${
+                        product.stock_level === 0
+                          ? 'text-tactical-red'
+                          : product.stock_level <= 5
+                          ? 'text-tactical-orange'
+                          : 'text-white/40'
+                      }`}
+                    >
+                      Stock: {product.stock_level}
+                    </span>
+                    <span className="text-xs text-white/30">
+                      Cost: {formatCurrency(product.cost_price)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => openEdit(product)}
+                    className="flex-1 p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
                   >
-                    Stock: {product.stock_level}
-                  </span>
-                  <span className="text-xs text-white/30">
-                    Cost: {formatCurrency(product.cost_price)}
-                  </span>
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(product.id)}
+                    className="flex-1 p-2 rounded-lg bg-tactical-red/10 hover:bg-tactical-red/20 text-tactical-red transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
-
-              {/* Actions */}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => openEdit(product)}
-                  className="flex-1 p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
-                >
-                  <Pencil className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => handleDelete(product.id)}
-                  className="flex-1 p-2 rounded-lg bg-tactical-red/10 hover:bg-tactical-red/20 text-tactical-red transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Create/Edit Modal */}
       {showModal && (

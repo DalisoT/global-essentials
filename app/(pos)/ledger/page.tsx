@@ -5,8 +5,9 @@ import { toast } from 'sonner';
 import { getSalesHistory } from '@/lib/actions/ledger';
 import { deleteSale, editSale } from '@/lib/actions/sales';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { Search, DollarSign, BookOpen, Pencil, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, DollarSign, BookOpen, Pencil, Trash2, X, ChevronLeft, ChevronRight, Receipt } from 'lucide-react';
 import type { Sale, Product, Client } from '@/lib/supabase-types';
+import { Skeleton, SkeletonTable, EmptyState } from '@/components/ui/Skeleton';
 
 export default function LedgerPage() {
   const [sales, setSales] = useState<(Sale & { product?: Product; client?: Client })[]>([]);
@@ -144,13 +145,13 @@ export default function LedgerPage() {
           All Transactions
         </h2>
         {isLoading ? (
-          <div className="card-tactical py-8 text-center text-white/40">
-            Loading...
-          </div>
+          <SkeletonTable rows={5} />
         ) : sales.length === 0 ? (
-          <div className="card-tactical py-8 text-center text-white/40">
-            No transactions found
-          </div>
+          <EmptyState
+            icon={Receipt}
+            title="No transactions yet"
+            description="Sales you make will appear here"
+          />
         ) : (
           <div className="card-tactical divide-y divide-white/5">
             {sales.map((sale) => (

@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { getAnalyticsData } from '@/lib/actions/analytics';
 import { getDashboardStats } from '@/lib/actions/dashboard';
 import { formatCurrency } from '@/lib/utils';
-import { Sparkles, Send, Loader2 } from 'lucide-react';
+import { Sparkles, Send, Loader2, TrendingUp } from 'lucide-react';
 import {
   LineChart,
   Line,
@@ -24,6 +24,7 @@ import {
 const COLORS = ['#3b82f6', '#22ff66', '#f97316', '#ef4444', '#a855f7', '#ec4899'];
 
 import type { DashboardStats } from '@/lib/supabase-types';
+import { Skeleton, EmptyState } from '@/components/ui/Skeleton';
 
 interface AnalyticsData {
   totalRevenue: number;
@@ -96,8 +97,14 @@ export default function AnalyticsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-white/40 uppercase tracking-widest">Loading...</div>
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-32 rounded-2xl" />
+          ))}
+        </div>
+        <Skeleton className="h-64 rounded-2xl" />
+        <Skeleton className="h-64 rounded-2xl" />
       </div>
     );
   }
@@ -105,7 +112,7 @@ export default function AnalyticsPage() {
   if (!data) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-white/40 uppercase tracking-widest">No data available</div>
+        <EmptyState icon={TrendingUp} title="No data available" description="Make some sales to see analytics" />
       </div>
     );
   }

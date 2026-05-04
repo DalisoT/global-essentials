@@ -9,6 +9,7 @@ import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { Search, Clock, CheckCircle, MessageCircle, AlertTriangle, Sparkles, Loader2, Bell, BellOff } from 'lucide-react';
 import type { Installment } from '@/lib/supabase-types';
 import type { Sale, Product, Client } from '@/lib/supabase-types';
+import { Skeleton, EmptyState } from '@/components/ui/Skeleton';
 
 export default function DebtsPage() {
   const [debts, setDebts] = useState<(Installment & { sale?: Sale & { product?: Product; client?: Client } })[]>([]);
@@ -153,13 +154,31 @@ export default function DebtsPage() {
           Unpaid Installments
         </h2>
         {isLoading ? (
-          <div className="card-tactical py-8 text-center text-white/40">
-            Loading...
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="card-tactical">
+                <div className="flex items-center gap-3 mb-3">
+                  <Skeleton className="w-12 h-12 rounded-full" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-1/3" />
+                    <Skeleton className="h-3 w-1/4" />
+                  </div>
+                  <Skeleton className="h-6 w-20" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-8 w-24 rounded-lg" />
+                  <Skeleton className="h-8 w-8 rounded-lg" />
+                  <Skeleton className="h-8 w-8 rounded-lg" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : debts.length === 0 ? (
-          <div className="card-tactical py-8 text-center text-white/40">
-            All debts cleared!
-          </div>
+          <EmptyState
+            icon={CheckCircle}
+            title="All debts cleared!"
+            description="No outstanding payments to collect"
+          />
         ) : (
           <div className="space-y-3">
             {debts.map((debt) => {
