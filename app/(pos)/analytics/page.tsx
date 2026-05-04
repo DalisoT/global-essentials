@@ -55,8 +55,8 @@ export default function AnalyticsPage() {
       getDashboardStats(),
     ]);
     // getAnalyticsData returns AnalyticsData on success, or { data: null, error: string } on failure
-    if ('totalRevenue' in analyticsResult) {
-      setData(analyticsResult);
+    if (analyticsResult && 'totalRevenue' in analyticsResult) {
+      setData(analyticsResult as AnalyticsData);
     } else {
       setData(null);
     }
