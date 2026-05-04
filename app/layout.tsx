@@ -13,8 +13,8 @@ export const metadata: Metadata = {
   description: 'Mobile-first POS system with debt management for Global Essentials',
   manifest: '/manifest.json',
   icons: {
-    icon: '/icon-192.png',
-    apple: '/icon-512.png',
+    icon: '/favicon.ico',
+    apple: '/apple-touch-icon.png',
   },
 };
 

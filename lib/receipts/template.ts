@@ -32,6 +32,12 @@ export function generateReceiptHTML(receipt: ReceiptData): string {
           background: #fff;
           color: #111;
         }
+        .logo {
+          width: 120px;
+          height: auto;
+          margin: 0 auto 15px;
+          display: block;
+        }
         .header {
           text-align: center;
           margin-bottom: 30px;
@@ -103,6 +109,7 @@ export function generateReceiptHTML(receipt: ReceiptData): string {
     </head>
     <body>
       <div class="header">
+        <img src="/logo.png" alt="Global Essentials Logo" class="logo" />
         <h1>Global Essentials</h1>
         <p>POS & Debt Management</p>
       </div>
