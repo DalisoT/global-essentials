@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { getCatalogProducts } from '@/lib/actions/catalog';
-import { MessageCircle, Phone } from 'lucide-react';
+import { MessageCircle, Phone, Star } from 'lucide-react';
 import { AnimatedProductCard } from './AnimatedProductCard';
 
 export const dynamic = 'force-dynamic';
