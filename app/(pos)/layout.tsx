@@ -13,10 +13,13 @@ import {
   Download,
   LogOut,
   User,
+  CloudOff,
 } from 'lucide-react';
 import { signOut } from '@/lib/actions/auth';
 import { useAuthStore } from '@/stores/auth-store';
 import { GlobalSearch } from '@/components/GlobalSearch';
+import { ServiceWorkerRegistration } from '@/components/ServiceWorkerRegistration';
+import { useSyncStatus } from '@/hooks/useSyncStatus';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -60,9 +63,11 @@ export default function POSLayout({
   children: React.ReactNode;
 }) {
   const { user } = useAuthStore();
+  const { pendingCount } = useSyncStatus();
 
   return (
     <div className="min-h-screen bg-black pb-24">
+      <ServiceWorkerRegistration />
       {/* Header */}
       <header className="sticky top-0 z-40 bg-black/80 backdrop-blur-xl border-b border-white/10">
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
@@ -78,6 +83,12 @@ export default function POSLayout({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {pendingCount > 0 && (
+              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-tactical-orange/20 text-tactical-orange text-xs font-bold">
+                <CloudOff className="w-3 h-3" />
+                {pendingCount}
+              </div>
+            )}
             <GlobalSearch />
             <form action={signOut}>
               <button

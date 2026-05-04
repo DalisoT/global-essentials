@@ -24,7 +24,7 @@ export async function syncPendingSales(
     client_id: string;
     payment_method: 'cash' | 'pay-slow';
     installment_duration?: number;
-  }) => Promise<{ error?: string }>
+  }) => Promise<{ error?: string | null }>
 ): Promise<{ synced: number; failed: number }> {
   const pending = await getPendingSales();
   let synced = 0;

@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { createSale, getProducts, getClients, createClient } from '@/lib/actions/sales';
+import { queueSale } from '@/lib/offline/sync';
+import { useOffline } from '@/hooks/useOffline';
 import { getSaleReceipt } from '@/lib/actions/receipts';
 import { formatCurrency } from '@/lib/utils';
 import { ReceiptModal } from '@/components/ReceiptModal';
@@ -21,6 +23,7 @@ import type { Product, Client } from '@/lib/supabase-types';
 
 export default function NewSalePage() {
   const router = useRouter();
+  const { isOnline } = useOffline();
   const [step, setStep] = useState(1);
   const [products, setProducts] = useState<Product[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -75,12 +78,23 @@ export default function NewSalePage() {
 
     setIsSubmitting(true);
 
-    const { data: saleData, error } = await createSale({
+    const salePayload = {
       product_id: selectedProduct.id,
       client_id: selectedClient.id,
       payment_method: paymentMethod,
       installment_duration: paymentMethod === 'pay-slow' ? installmentDuration : undefined,
-    });
+    };
+
+    // Use offline queue if not online
+    if (!isOnline) {
+      await queueSale(salePayload);
+      setIsSubmitting(false);
+      toast.success('Sale saved offline. Will sync when back online.');
+      router.push('/dashboard');
+      return;
+    }
+
+    const { data: saleData, error } = await createSale(salePayload);
 
     setIsSubmitting(false);
 

@@ -1,29 +1,34 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { getPendingCount } from '@/lib/offline/sync';
+import { useState, useEffect, useCallback } from 'react';
+import { getPendingCount, syncPendingSales } from '@/lib/offline/sync';
+import { createSale } from '@/lib/actions/sales';
 
 export function useSyncStatus() {
   const [pendingCount, setPendingCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  useEffect(() => {
-    const checkPending = async () => {
-      const count = await getPendingCount();
-      setPendingCount(count);
-    };
+  const checkPending = useCallback(async () => {
+    const count = await getPendingCount();
+    setPendingCount(count);
+  }, []);
 
+  useEffect(() => {
     checkPending();
     const interval = setInterval(checkPending, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [checkPending]);
 
-  const triggerSync = async () => {
+  const triggerSync = useCallback(async () => {
     setIsSyncing(true);
-    // Sync will be triggered by the syncPendingSales function
-    // called from a useEffect in the layout or page
-    setTimeout(() => setIsSyncing(false), 2000);
-  };
+    try {
+      const result = await syncPendingSales(createSale);
+      await checkPending();
+      return result;
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [checkPending]);
 
-  return { pendingCount, isSyncing, triggerSync };
+  return { pendingCount, isSyncing, triggerSync, checkPending };
 }

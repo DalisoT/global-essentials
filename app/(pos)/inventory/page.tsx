@@ -186,6 +186,17 @@ export default function InventoryPage() {
     setImageUrls([]);
   };
 
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this product?')) return;
+    const { error } = await deleteProduct(id);
+    if (error) {
+      toast.error('Failed to delete');
+    } else {
+      toast.success('Product deleted');
+      loadProducts();
+    }
+  };
+
   const filteredProducts = products.filter((p) =>
     p.name.toLowerCase().includes(search.toLowerCase())
   );
