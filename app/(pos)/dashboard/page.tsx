@@ -9,7 +9,6 @@ import {
   ArrowUpRight,
 } from 'lucide-react';
 import type { Sale, Product, Installment, Client } from '@/lib/supabase-types';
-import type { Sale as SaleWithRelations, Installment as InstallmentWithRelations } from '@/lib/actions/dashboard';
 
 type SaleWithProductAndClient = Sale & { product?: Product; client?: Client };
 type InstallmentWithSaleAndClient = Installment & { sale?: Sale & { client?: Client } };
