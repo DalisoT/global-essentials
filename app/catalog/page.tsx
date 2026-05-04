@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { getCatalogProducts } from '@/lib/actions/catalog';
-import { MessageCircle, Phone, Star } from 'lucide-react';
+import { MessageCircle, Phone } from 'lucide-react';
 import { AnimatedProductCard } from './AnimatedProductCard';
 
 export const dynamic = 'force-dynamic';
@@ -18,9 +18,7 @@ export default async function CatalogPage() {
 
         <div className="relative container mx-auto px-6 py-12">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-2xl bg-tactical-blue flex items-center justify-center">
-              <Star className="w-6 h-6 text-white" />
-            </div>
+            <img src="/logo.png" alt="Global Essentials Logo" className="w-14 h-14 rounded-2xl object-contain bg-white/10 p-1" />
             <div>
               <h1 className="text-3xl font-black tracking-tighter">GLOBAL ESSENTIALS</h1>
               <p className="text-white/60 uppercase tracking-widest text-sm">Premium Products</p>
@@ -94,7 +92,7 @@ export default async function CatalogPage() {
       <footer className="border-t border-white/10 py-8 mt-12">
         <div className="container mx-auto px-6 text-center">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <Star className="w-5 h-5 text-tactical-blue" />
+            <img src="/logo.png" alt="Logo" className="w-8 h-8 object-contain" />
             <span className="font-black uppercase tracking-tight">Global Essentials</span>
           </div>
           <p className="text-white/40 text-sm">Premium Quality. Fair Prices.</p>
