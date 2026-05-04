@@ -3,7 +3,6 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { Toaster } from 'sonner';
 import { AuthProvider } from './providers';
-import { ThemeProvider } from '@/components/ThemeProvider';
 import { ServiceWorkerRegistration } from '@/components/ServiceWorkerRegistration';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -34,22 +33,20 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <ThemeProvider>
-          <AuthProvider>
-            <ServiceWorkerRegistration />
-            {children}
-            <Toaster
-              position="top-center"
-              toastOptions={{
-                style: {
-                  background: '#1e293b',
-                  color: '#fff',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                },
-              }}
-            />
-          </AuthProvider>
-        </ThemeProvider>
+        <AuthProvider>
+          <ServiceWorkerRegistration />
+          {children}
+          <Toaster
+            position="top-center"
+            toastOptions={{
+              style: {
+                background: '#1e293b',
+                color: '#fff',
+                border: '1px solid rgba(255,255,255,0.1)',
+              },
+            }}
+          />
+        </AuthProvider>
       </body>
     </html>
   );

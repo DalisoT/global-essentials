@@ -14,7 +14,6 @@ import {
   LogOut,
   User,
 } from 'lucide-react';
-import { ThemeToggle } from '@/components/ThemeToggle';
 import { signOut } from '@/lib/actions/auth';
 import { useAuthStore } from '@/stores/auth-store';
 import { GlobalSearch } from '@/components/GlobalSearch';
@@ -80,7 +79,6 @@ export default function POSLayout({
           </div>
           <div className="flex items-center gap-2">
             <GlobalSearch />
-            <ThemeToggle />
             <form action={signOut}>
               <button
                 type="submit"
