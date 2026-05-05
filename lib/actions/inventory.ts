@@ -78,16 +78,17 @@ export async function uploadProductImages(imageDataArray: string[]) {
   const auth = await requireAuth();
   if ('error' in auth) return { data: null, error: auth.error };
   const supabase = auth.supabase;
-  const uploadedUrls: string[] = [];
 
-  for (const imageData of imageDataArray) {
-    const result = await uploadProductImage(imageData, supabase);
-    if (result.error || !result.data) {
-      return { data: null, error: result.error || 'Upload failed' };
-    }
-    uploadedUrls.push(result.data);
+  const results = await Promise.all(
+    imageDataArray.map((imageData) => uploadProductImage(imageData, supabase))
+  );
+
+  const errors = results.filter((r) => r.error || !r.data);
+  if (errors.length > 0) {
+    return { data: null, error: errors[0].error || 'Upload failed' };
   }
 
+  const uploadedUrls = results.map((r) => r.data!);
   return { data: uploadedUrls, error: null };
 }
 
