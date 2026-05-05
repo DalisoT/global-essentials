@@ -64,7 +64,8 @@ export function ReceiptModal({ html, onClose }: ReceiptModalProps) {
     if (!contentRef.current) return;
     try {
       const canvas = await html2canvas(contentRef.current, { scale: 2, useCORS: true });
-      const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      if (!blob) throw new Error('Failed to create image');
       const file = new File([blob], 'receipt.png', { type: 'image/png' });
 
       if (navigator.canShare?.({ files: [file] })) {

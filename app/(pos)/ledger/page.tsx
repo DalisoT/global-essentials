@@ -4,10 +4,12 @@ import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { getSalesHistory } from '@/lib/actions/ledger';
 import { deleteSale, editSale } from '@/lib/actions/sales';
+import { getSaleReceipt } from '@/lib/actions/receipts';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { Search, DollarSign, BookOpen, Pencil, Trash2, X, ChevronLeft, ChevronRight, Receipt } from 'lucide-react';
+import { Search, DollarSign, BookOpen, Pencil, Trash2, X, ChevronLeft, ChevronRight, Receipt, Send } from 'lucide-react';
 import type { Sale, Product, Client } from '@/lib/supabase-types';
 import { Skeleton, SkeletonTable, EmptyState } from '@/components/ui/Skeleton';
+import { ReceiptModal } from '@/components/ReceiptModal';
 
 export default function LedgerPage() {
   const [sales, setSales] = useState<(Sale & { product?: Product; client?: Client })[]>([]);
@@ -17,6 +19,8 @@ export default function LedgerPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
+  const [receiptHtml, setReceiptHtml] = useState<string | null>(null);
   const PAGE_SIZE = 50;
 
   useEffect(() => {
@@ -67,6 +71,16 @@ export default function LedgerPage() {
       toast.success('Transaction updated');
       setEditingSale(null);
       loadSales();
+    }
+  };
+
+  const handleViewReceipt = async (saleId: string) => {
+    const { data } = await getSaleReceipt(saleId);
+    if (data) {
+      setReceiptHtml(data);
+      setViewingReceipt(saleId);
+    } else {
+      toast.error('Failed to load receipt');
     }
   };
 
@@ -202,6 +216,13 @@ export default function LedgerPage() {
                   </div>
                   <div className="flex gap-1">
                     <button
+                      onClick={() => handleViewReceipt(sale.id)}
+                      className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white"
+                      title="View Receipt"
+                    >
+                      <Receipt className="w-4 h-4" />
+                    </button>
+                    <button
                       onClick={() => setEditingSale(sale)}
                       className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white"
                     >
@@ -294,6 +315,17 @@ export default function LedgerPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Receipt Modal */}
+      {receiptHtml && viewingReceipt && (
+        <ReceiptModal
+          html={receiptHtml}
+          onClose={() => {
+            setReceiptHtml(null);
+            setViewingReceipt(null);
+          }}
+        />
       )}
     </div>
   );
