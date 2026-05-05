@@ -6,6 +6,7 @@ export async function queueSale(saleData: {
   client_id: string;
   payment_method: 'cash' | 'pay-slow';
   installment_duration?: number;
+  installments?: Array<{ amount_due: number; due_date: string }>;
 }): Promise<string> {
   const id = crypto.randomUUID();
   const sale: OfflineSale = {
@@ -24,6 +25,7 @@ export async function syncPendingSales(
     client_id: string;
     payment_method: 'cash' | 'pay-slow';
     installment_duration?: number;
+    installments?: Array<{ amount_due: number; due_date: string }>;
   }) => Promise<{ error?: string | null }>
 ): Promise<{ synced: number; failed: number }> {
   const pending = await getPendingSales();

@@ -8,11 +8,13 @@ export async function createSale({
   client_id,
   payment_method,
   installment_duration,
+  installments,
 }: {
   product_id: string;
   client_id: string;
   payment_method: 'cash' | 'pay-slow';
   installment_duration?: number;
+  installments?: Array<{ amount_due: number; due_date: string }>;
 }) {
   const auth = await requireAuth();
   if ('error' in auth) return { data: null, error: auth.error };
@@ -49,6 +51,31 @@ export async function createSale({
   const totalAmount = product.selling_price;
   const paymentStatus = payment_method === 'cash' ? 'paid' : 'pending';
 
+  // Validate custom installments
+  if (installments && installments.length > 0) {
+    if (installments.length < 2) {
+      return { error: 'Custom plan must have at least 2 installments' };
+    }
+    if (installments.length > 10) {
+      return { error: 'Custom plan cannot have more than 10 installments' };
+    }
+    for (const inst of installments) {
+      if (inst.amount_due <= 0) {
+        return { error: 'All installment amounts must be greater than zero' };
+      }
+      const dueDate = new Date(inst.due_date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (dueDate < today) {
+        return { error: 'Installment due dates cannot be in the past' };
+      }
+    }
+    const sum = installments.reduce((s, i) => s + i.amount_due, 0);
+    if (sum !== totalAmount) {
+      return { error: `Installments must sum to ${totalAmount}, got ${sum}` };
+    }
+  }
+
   // Create sale
   const { data: sale, error: saleError } = await supabase
     .from('sales')
@@ -65,40 +92,58 @@ export async function createSale({
   if (saleError) return { error: saleError.message };
 
   // If Pay-Slow, create installments
-  if (payment_method === 'pay-slow' && installment_duration) {
-    const duration = installment_duration;
-    const upfront = Math.ceil(totalAmount / duration);
-    const monthly = Math.floor(totalAmount / duration);
-
-    const installments = [];
-
-    // First installment (paid upfront)
-    installments.push({
-      sale_id: sale.id,
-      amount_due: upfront,
-      due_date: new Date().toISOString().split('T')[0],
-      is_paid: true,
-      paid_at: new Date().toISOString(),
-    });
-
-    // Remaining installments
-    for (let i = 1; i < duration; i++) {
-      const dueDate = new Date();
-      dueDate.setMonth(dueDate.getMonth() + i);
-      installments.push({
-        sale_id: sale.id,
-        amount_due: monthly,
-        due_date: dueDate.toISOString().split('T')[0],
-        is_paid: false,
-        paid_at: null,
+  if (payment_method === 'pay-slow') {
+    // Custom installments provided (custom plan)
+    if (installments && installments.length > 0) {
+      const processed = installments.map((inst, idx) => {
+        const dueDate = new Date(inst.due_date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const isToday = dueDate.toISOString().split('T')[0] === today.toISOString().split('T')[0];
+        return {
+          sale_id: sale.id,
+          amount_due: inst.amount_due,
+          due_date: inst.due_date,
+          is_paid: idx === 0 && isToday,
+          paid_at: (idx === 0 && isToday) ? new Date().toISOString() : null,
+        };
       });
+      const { error } = await supabase.from('installments').insert(processed);
+      if (error) return { error: error.message };
     }
+    // Preset duration (existing equal-split logic)
+    else if (installment_duration) {
+      const duration = installment_duration;
+      const upfront = Math.ceil(totalAmount / duration);
+      const monthly = Math.floor(totalAmount / duration);
 
-    const { error: installmentsError } = await supabase
-      .from('installments')
-      .insert(installments);
+      const presetInstallments = [];
 
-    if (installmentsError) return { error: installmentsError.message };
+      // First installment (paid upfront)
+      presetInstallments.push({
+        sale_id: sale.id,
+        amount_due: upfront,
+        due_date: new Date().toISOString().split('T')[0],
+        is_paid: true,
+        paid_at: new Date().toISOString(),
+      });
+
+      // Remaining installments
+      for (let i = 1; i < duration; i++) {
+        const dueDate = new Date();
+        dueDate.setMonth(dueDate.getMonth() + i);
+        presetInstallments.push({
+          sale_id: sale.id,
+          amount_due: monthly,
+          due_date: dueDate.toISOString().split('T')[0],
+          is_paid: false,
+          paid_at: null,
+        });
+      }
+
+      const { error } = await supabase.from('installments').insert(presetInstallments);
+      if (error) return { error: error.message };
+    }
   }
 
   // Decrement stock

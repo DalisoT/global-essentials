@@ -37,6 +37,13 @@ export default function NewSalePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [receiptHtml, setReceiptHtml] = useState<string | null>(null);
   const [lastSaleId, setLastSaleId] = useState<string | null>(null);
+  const [showCustomPlan, setShowCustomPlan] = useState(false);
+  const [customInstallments, setCustomInstallments] = useState<Array<{
+    amount: number;
+    dueDate: string;
+    dateMode: 'calendar' | 'relative';
+    relativeOption: string;
+  }>>([{ amount: 0, dueDate: '', dateMode: 'calendar', relativeOption: '' }]);
 
   useEffect(() => {
     getProducts().then(({ data }) => data && setProducts(data));
@@ -82,7 +89,11 @@ export default function NewSalePage() {
       product_id: selectedProduct.id,
       client_id: selectedClient.id,
       payment_method: paymentMethod,
-      installment_duration: paymentMethod === 'pay-slow' ? installmentDuration : undefined,
+      ...(showCustomPlan
+        ? { installments: customInstallments
+            .filter(inst => inst.amount > 0)
+            .map(inst => ({ amount_due: inst.amount, due_date: inst.dueDate })) }
+        : { installment_duration: paymentMethod === 'pay-slow' ? installmentDuration : undefined }),
     };
 
     // Use offline queue if not online
@@ -121,6 +132,9 @@ export default function NewSalePage() {
   const monthlyPayment = selectedProduct
     ? Math.floor(selectedProduct.selling_price / installmentDuration)
     : 0;
+
+  const getCustomTotal = () =>
+    customInstallments.reduce((sum, inst) => sum + (inst.amount || 0), 0);
 
   return (
     <div className="space-y-6">
@@ -346,10 +360,10 @@ export default function NewSalePage() {
                 {[2, 3, 4, 6, 8, 12].map((months) => (
                   <button
                     key={months}
-                    onClick={() => setInstallmentDuration(months)}
+                    onClick={() => { setInstallmentDuration(months); setShowCustomPlan(false); }}
                     className={cn(
                       'py-3 rounded-xl font-bold uppercase tracking-tight transition-all',
-                      installmentDuration === months
+                      installmentDuration === months && !showCustomPlan
                         ? 'bg-tactical-blue text-white'
                         : 'bg-white/5 text-white/60 hover:bg-white/10'
                     )}
@@ -357,6 +371,17 @@ export default function NewSalePage() {
                     {months}mo
                   </button>
                 ))}
+                <button
+                  onClick={() => { setInstallmentDuration(0); setShowCustomPlan(true); }}
+                  className={cn(
+                    'py-3 rounded-xl font-bold uppercase tracking-tight transition-all',
+                    showCustomPlan
+                      ? 'border-tactical-purple bg-tactical-purple/10 text-white'
+                      : 'bg-white/5 text-white/60 hover:bg-white/10'
+                  )}
+                >
+                  Custom
+                </button>
               </div>
               <div className="bg-white/5 rounded-xl p-4 space-y-2">
                 <div className="flex items-center justify-between text-sm">
@@ -371,6 +396,158 @@ export default function NewSalePage() {
                     {formatCurrency(monthlyPayment)}/mo
                   </span>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Custom Payment Plan Builder */}
+          {paymentMethod === 'pay-slow' && showCustomPlan && (
+            <div className="card-tactical space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-white/60">
+                  Custom Payment Plan
+                </h3>
+                <span className="text-xs text-white/40">
+                  {customInstallments.filter(i => i.amount > 0).length} installments
+                </span>
+              </div>
+
+              {/* Installment rows */}
+              <div className="space-y-3 max-h-64 overflow-y-auto">
+                {customInstallments.map((inst, idx) => (
+                  <div key={idx} className="flex gap-2 items-center">
+                    <span className="text-xs text-white/40 w-6">#{idx + 1}</span>
+
+                    {/* Amount input */}
+                    <input
+                      type="number"
+                      value={inst.amount || ''}
+                      onChange={(e) => {
+                        const updated = [...customInstallments];
+                        updated[idx].amount = parseFloat(e.target.value) || 0;
+                        setCustomInstallments(updated);
+                      }}
+                      className="flex-1 h-10 px-3 bg-white/5 border border-white/10 rounded-lg text-white"
+                      placeholder="Amount"
+                    />
+
+                    {/* Date mode toggle */}
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = [...customInstallments];
+                          updated[idx].dateMode = 'calendar';
+                          setCustomInstallments(updated);
+                        }}
+                        className={cn(
+                          'p-2 rounded',
+                          inst.dateMode === 'calendar' ? 'bg-tactical-blue' : 'bg-white/5'
+                        )}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = [...customInstallments];
+                          updated[idx].dateMode = 'relative';
+                          setCustomInstallments(updated);
+                        }}
+                        className={cn(
+                          'p-2 rounded',
+                          inst.dateMode === 'relative' ? 'bg-tactical-blue' : 'bg-white/5'
+                        )}
+                      >
+                        <Clock className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Date input based on mode */}
+                    {inst.dateMode === 'calendar' ? (
+                      <input
+                        type="date"
+                        value={inst.dueDate}
+                        onChange={(e) => {
+                          const updated = [...customInstallments];
+                          updated[idx].dueDate = e.target.value;
+                          setCustomInstallments(updated);
+                        }}
+                        className="h-10 px-3 bg-white/5 border border-white/10 rounded-lg text-white"
+                      />
+                    ) : (
+                      <select
+                        value={inst.relativeOption}
+                        onChange={(e) => {
+                          const updated = [...customInstallments];
+                          updated[idx].relativeOption = e.target.value;
+                          const daysMap: Record<string, number> = {
+                            'today': 0,
+                            '7days': 7,
+                            '2weeks': 14,
+                            '1month': 30,
+                            '2months': 60,
+                          };
+                          const days = daysMap[e.target.value] || 0;
+                          const date = new Date();
+                          date.setDate(date.getDate() + days);
+                          updated[idx].dueDate = date.toISOString().split('T')[0];
+                          setCustomInstallments(updated);
+                        }}
+                        className="h-10 px-3 bg-white/5 border border-white/10 rounded-lg text-white"
+                      >
+                        <option value="">Select...</option>
+                        <option value="today">Today</option>
+                        <option value="7days">In 7 days</option>
+                        <option value="2weeks">In 2 weeks</option>
+                        <option value="1month">In 1 month</option>
+                        <option value="2months">In 2 months</option>
+                      </select>
+                    )}
+
+                    {/* Remove button */}
+                    {customInstallments.length > 2 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomInstallments(prev => prev.filter((_, i) => i !== idx));
+                        }}
+                        className="p-2 hover:bg-white/10 rounded"
+                      >
+                        <X className="w-4 h-4 text-white/40" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Add installment button */}
+              {customInstallments.length < 10 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCustomInstallments(prev => [
+                      ...prev,
+                      { amount: 0, dueDate: new Date().toISOString().split('T')[0], dateMode: 'calendar', relativeOption: '' }
+                    ]);
+                  }}
+                  className="w-full py-2 border border-dashed border-white/20 rounded-lg text-white/60 text-sm hover:bg-white/5"
+                >
+                  + Add Installment
+                </button>
+              )}
+
+              {/* Running total validation */}
+              <div className={cn(
+                'flex items-center justify-between p-3 rounded-lg',
+                getCustomTotal() === selectedProduct?.selling_price
+                  ? 'bg-green-500/20 text-green-400'
+                  : 'bg-red-500/20 text-red-400'
+              )}>
+                <span className="text-sm">Total</span>
+                <span className="font-bold">
+                  {formatCurrency(getCustomTotal())} / {formatCurrency(selectedProduct?.selling_price || 0)}
+                </span>
               </div>
             </div>
           )}
