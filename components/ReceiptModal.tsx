@@ -2,8 +2,10 @@
 
 import { useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
-import { Printer, Download, X } from 'lucide-react';
+import { Printer, Download, Share2, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 
 interface ReceiptModalProps {
   html: string;
@@ -31,7 +33,23 @@ export function ReceiptModal({ html, onClose }: ReceiptModalProps) {
     contentRef: contentRef,
   });
 
-  const handleDownload = () => {
+  const handleDownloadPDF = async () => {
+    if (!contentRef.current) return;
+    try {
+      const canvas = await html2canvas(contentRef.current, { scale: 2, useCORS: true });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const width = pdf.internal.pageSize.getWidth();
+      const height = (canvas.height * width) / canvas.width;
+      pdf.addImage(imgData, 'PNG', 0, 0, width, height);
+      pdf.save('receipt.pdf');
+      toast.success('PDF downloaded');
+    } catch {
+      toast.error('Failed to generate PDF');
+    }
+  };
+
+  const handleDownloadHTML = () => {
     const blob = new Blob([sanitizedHTML], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -40,6 +58,33 @@ export function ReceiptModal({ html, onClose }: ReceiptModalProps) {
     a.click();
     URL.revokeObjectURL(url);
     toast.success('Receipt downloaded');
+  };
+
+  const handleShare = async () => {
+    if (!contentRef.current) return;
+    try {
+      const canvas = await html2canvas(contentRef.current, { scale: 2, useCORS: true });
+      const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      const file = new File([blob], 'receipt.png', { type: 'image/png' });
+
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          title: 'Receipt',
+          files: [file],
+        });
+        toast.success('Receipt shared');
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'receipt.png';
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success('Receipt image downloaded');
+      }
+    } catch {
+      toast.error('Failed to share receipt');
+    }
   };
 
   const sanitizedHTML = sanitizeHTML(html);
@@ -75,11 +120,18 @@ export function ReceiptModal({ html, onClose }: ReceiptModalProps) {
             Print
           </button>
           <button
-            onClick={handleDownload}
+            onClick={handleShare}
+            className="btn-tactical-secondary flex-1 h-12 flex items-center justify-center gap-2"
+          >
+            <Share2 className="w-5 h-5" />
+            Share
+          </button>
+          <button
+            onClick={handleDownloadPDF}
             className="btn-tactical flex-1 h-12 flex items-center justify-center gap-2"
           >
             <Download className="w-5 h-5" />
-            Download
+            PDF
           </button>
         </div>
       </div>
