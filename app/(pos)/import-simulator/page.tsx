@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { cn, formatCurrency } from '@/lib/utils';
@@ -16,7 +16,7 @@ import { getShippingRates, getCustomExchangeRate, saveCustomExchangeRate } from 
 import { useImportSimulatorStore } from '@/stores/import-simulator-store';
 import type { ShippingRate } from '@/lib/supabase-types';
 
-export default function ImportSimulatorPage() {
+function ImportSimulatorContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -307,5 +307,13 @@ export default function ImportSimulatorPage() {
         <p>Air: Mon & Thu | Sea: Wed & Fri</p>
       </div>
     </div>
+  );
+}
+
+export default function ImportSimulatorPage() {
+  return (
+    <Suspense fallback={<div className="p-4 text-white/60">Loading...</div>}>
+      <ImportSimulatorContent />
+    </Suspense>
   );
 }

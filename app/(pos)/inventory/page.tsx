@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { getInventory, createProduct, updateProduct, deleteProduct, uploadProductImages } from '@/lib/actions/inventory';
@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 import type { Product } from '@/lib/supabase-types';
 import { Skeleton, SkeletonCard, EmptyState } from '@/components/ui/Skeleton';
 
-export default function InventoryPage() {
+function InventoryContent() {
   const searchParams = useSearchParams();
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
@@ -510,5 +510,13 @@ export default function InventoryPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function InventoryPage() {
+  return (
+    <Suspense fallback={<div className="p-4 text-white/60">Loading...</div>}>
+      <InventoryContent />
+    </Suspense>
   );
 }
