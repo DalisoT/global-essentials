@@ -2,15 +2,27 @@
 
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { RefreshCw } from 'lucide-react';
 
 interface ExchangeRateInputProps {
   rate: number;
   onRateChange: (rate: number) => void;
   onSaveDefault: () => void;
+  onRefresh?: () => void;
   isSaving?: boolean;
+  isRefreshing?: boolean;
+  source?: 'api' | 'cache' | 'fallback' | 'manual';
 }
 
-export function ExchangeRateInput({ rate, onRateChange, onSaveDefault, isSaving }: ExchangeRateInputProps) {
+export function ExchangeRateInput({
+  rate,
+  onRateChange,
+  onSaveDefault,
+  onRefresh,
+  isSaving,
+  isRefreshing,
+  source = 'manual'
+}: ExchangeRateInputProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [tempRate, setTempRate] = useState(rate.toString());
 
@@ -33,11 +45,32 @@ export function ExchangeRateInput({ rate, onRateChange, onSaveDefault, isSaving 
     }
   };
 
+  const sourceLabel = {
+    api: 'Live',
+    cache: 'Cached',
+    fallback: 'Default',
+    manual: 'Manual'
+  };
+
+  const sourceColor = {
+    api: 'text-tactical-neon',
+    cache: 'text-tactical-orange',
+    fallback: 'text-tactical-red',
+    manual: 'text-white/40'
+  };
+
   return (
     <div className="space-y-2">
-      <label className="text-sm font-bold uppercase tracking-wider text-white/60">
-        Exchange Rate (USD → ZMW)
-      </label>
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-bold uppercase tracking-wider text-white/60">
+          Exchange Rate (USD → ZMW)
+        </label>
+        {source && (
+          <span className={cn('text-xs font-medium', sourceColor[source])}>
+            {sourceLabel[source]}
+          </span>
+        )}
+      </div>
       <div className="flex gap-2">
         <div className="flex-1 relative">
           {isEditing ? (
@@ -62,6 +95,20 @@ export function ExchangeRateInput({ rate, onRateChange, onSaveDefault, isSaving 
             </button>
           )}
         </div>
+        {onRefresh && (
+          <button
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            className={cn(
+              'h-14 px-3 rounded-xl font-bold text-sm transition-all',
+              'bg-white/5 text-white/60 hover:bg-white/10',
+              isRefreshing && 'opacity-50 cursor-not-allowed'
+            )}
+            title="Refresh from live API"
+          >
+            <RefreshCw className={cn('w-4 h-4', isRefreshing && 'animate-spin')} />
+          </button>
+        )}
         <button
           onClick={onSaveDefault}
           disabled={isSaving}

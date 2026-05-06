@@ -1,101 +1,58 @@
-import { FALLBACK_EXCHANGE_RATES } from '../config';
+const EXCHANGE_API_URL = 'https://api.exchangerate-api.com/v4/latest/USD';
+const CACHE_DURATION_MS = 4 * 60 * 60 * 1000; // 4 hours
+const ZMW_CODE = 'ZMW';
 
-const EXCHANGE_RATE_API = 'https://api.exchangerate-api.com/v4/latest/ZMW';
-
-export interface ExchangeRates {
-  [currency: string]: number;
-}
-
-const CACHE_KEY = 'ge-exchange-rates';
-const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
-
-interface CachedRates {
-  rates: ExchangeRates;
+interface CachedRate {
+  rate: number;
   timestamp: number;
+  source: 'api' | 'manual';
 }
 
-export const SUPPORTED_CURRENCIES = [
-  { code: 'ZMW', symbol: 'K', name: 'Zambian Kwacha', flag: '🇿🇲' },
-  { code: 'USD', symbol: '$', name: 'US Dollar', flag: '🇺🇸' },
-  { code: 'EUR', symbol: '€', name: 'Euro', flag: '🇪🇺' },
-  { code: 'GBP', symbol: '£', name: 'British Pound', flag: '🇬🇧' },
-  { code: 'BWP', symbol: 'P', name: 'Botswana Pula', flag: '🇧🇼' },
-  { code: 'ZAR', symbol: 'R', name: 'South African Rand', flag: '🇿🇦' },
-  { code: 'UGX', symbol: 'USh', name: 'Ugandan Shilling', flag: '🇺🇬' },
-];
+let inMemoryCache: CachedRate | null = null;
 
-export async function fetchExchangeRates(): Promise<ExchangeRates> {
-  // Check cache first
-  if (typeof localStorage !== 'undefined') {
-    const cached = localStorage.getItem(CACHE_KEY);
-    if (cached) {
-      const parsed: CachedRates = JSON.parse(cached);
-      if (Date.now() - parsed.timestamp < CACHE_DURATION) {
-        return parsed.rates;
-      }
-    }
+export async function fetchLiveUSDToZMW(): Promise<{ rate: number; source: 'api' | 'cache' | 'fallback'; updatedAt?: string }> {
+  // Return in-memory cached if still valid
+  if (inMemoryCache && Date.now() - inMemoryCache.timestamp < CACHE_DURATION_MS) {
+    return { rate: inMemoryCache.rate, source: inMemoryCache.source as 'api' | 'cache', updatedAt: new Date(inMemoryCache.timestamp).toISOString() };
   }
 
   try {
-    const response = await fetch(EXCHANGE_RATE_API);
-    if (!response.ok) throw new Error('Failed to fetch rates');
+    const res = await fetch(EXCHANGE_API_URL, {
+      headers: { 'Accept': 'application/json' },
+      cache: 'no-store' // Always get fresh data from API
+    });
 
-    const data = await response.json();
-    const rates: ExchangeRates = {
-      ZMW: 1,
-      USD: data.rates.USD,
-      EUR: data.rates.EUR,
-      GBP: data.rates.GBP,
-      BWP: data.rates.BWP,
-      ZAR: data.rates.ZAR,
-      UGX: data.rates.UGX,
-    };
-
-    // Cache the rates
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(
-        CACHE_KEY,
-        JSON.stringify({ rates, timestamp: Date.now() })
-      );
+    if (!res.ok) {
+      throw new Error(`API responded with status: ${res.status}`);
     }
 
-    return rates;
-  } catch (error) {
-    // Return cached rates if fetch fails (even if expired)
-    if (typeof localStorage !== 'undefined') {
-      const cached = localStorage.getItem(CACHE_KEY);
-      if (cached) {
-        const parsed: CachedRates = JSON.parse(cached);
-        return parsed.rates;
-      }
+    const data = await res.json();
+
+    if (!data.rates?.[ZMW_CODE]) {
+      throw new Error('ZMW rate not found in API response');
     }
 
-    // Fallback to configured rates
-    return { ...FALLBACK_EXCHANGE_RATES };
+    const rate = data.rates[ZMW_CODE];
+
+    // Update in-memory cache
+    inMemoryCache = { rate, timestamp: Date.now(), source: 'api' };
+
+    return { rate, source: 'api', updatedAt: new Date().toISOString() };
+  } catch (err) {
+    // Return cached value if available, otherwise fallback
+    if (inMemoryCache) {
+      return { rate: inMemoryCache.rate, source: 'cache' };
+    }
+
+    // Default fallback
+    return { rate: 26.0, source: 'fallback' };
   }
 }
 
-export function convertCurrency(
-  amount: number,
-  from: string,
-  to: string,
-  rates: ExchangeRates
-): number {
-  if (from === to) return amount;
-  const inZMW = amount / rates[from];
-  return inZMW * rates[to];
+export function getCachedRate(): number | null {
+  return inMemoryCache?.rate ?? null;
 }
 
-export function getCurrencyInfo(code: string) {
-  return SUPPORTED_CURRENCIES.find((c) => c.code === code) || SUPPORTED_CURRENCIES[0];
-}
-
-export function isRatesStale(): boolean {
-  if (typeof localStorage === 'undefined') return true;
-
-  const cached = localStorage.getItem(CACHE_KEY);
-  if (!cached) return true;
-
-  const parsed: CachedRates = JSON.parse(cached);
-  return Date.now() - parsed.timestamp > CACHE_DURATION;
+export function clearRateCache(): void {
+  inMemoryCache = null;
 }

@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { cn, formatCurrency } from '@/lib/utils';
-import { Plane, Save, ArrowRight } from 'lucide-react';
+import { Plane, Save, ArrowRight, RefreshCw } from 'lucide-react';
 import { ShippingTypeSelector } from '@/components/import-simulator/ShippingTypeSelector';
 import { ExchangeRateInput } from '@/components/import-simulator/ExchangeRateInput';
 import { CostBreakdown } from '@/components/import-simulator/CostBreakdown';
@@ -13,6 +13,7 @@ import { AddToInventoryButton } from '@/components/import-simulator/AddToInvento
 import { calculateLandedCost, type CalculationResult } from '@/lib/import/calculator';
 import { SHIPPING_TYPES, type ShippingTypeId } from '@/lib/import/shipping-types';
 import { getShippingRates, getCustomExchangeRate, saveCustomExchangeRate } from '@/lib/actions/import-simulator';
+import { fetchLiveUSDToZMW } from '@/lib/currency/rates';
 import { useImportSimulatorStore } from '@/stores/import-simulator-store';
 import type { ShippingRate } from '@/lib/supabase-types';
 
@@ -38,6 +39,8 @@ function ImportSimulatorContent() {
   const [shippingRates, setShippingRates] = useState<ShippingRate[]>([]);
   const [isLoadingRates, setIsLoadingRates] = useState(true);
   const [isSavingRate, setIsSavingRate] = useState(false);
+  const [isRefreshingRate, setIsRefreshingRate] = useState(false);
+  const [rateSource, setRateSource] = useState<'api' | 'cache' | 'fallback' | 'manual'>('manual');
   const [showProfit, setShowProfit] = useState(false);
 
   // Load rates and exchange rate on mount
@@ -52,13 +55,31 @@ function ImportSimulatorContent() {
         setShippingRates(rates);
       }
 
-      // Load exchange rate
-      const { rate } = await getCustomExchangeRate();
+      // Fetch live exchange rate from API
+      setIsRefreshingRate(true);
+      const { rate, source } = await fetchLiveUSDToZMW();
       setExchangeRate(rate);
+      setRateSource(source);
       setDefaultExchangeRate(rate);
+      setIsRefreshingRate(false);
     }
     loadData();
   }, [setDefaultExchangeRate]);
+
+  // Manual override sets source to manual
+  useEffect(() => {
+    setRateSource('manual');
+  }, [exchangeRate]);
+
+  const handleRefreshRate = async () => {
+    setIsRefreshingRate(true);
+    const { rate, source } = await fetchLiveUSDToZMW();
+    setExchangeRate(rate);
+    setRateSource(source);
+    setDefaultExchangeRate(rate);
+    setIsRefreshingRate(false);
+    toast.success(`Rate updated: K${rate.toFixed(2)} (${source})`);
+  };
 
   // Handle prefill from URL (from Add to Inventory button)
   useEffect(() => {
@@ -133,7 +154,10 @@ function ImportSimulatorContent() {
           rate={exchangeRate}
           onRateChange={setExchangeRate}
           onSaveDefault={handleSaveExchangeRate}
+          onRefresh={handleRefreshRate}
           isSaving={isSavingRate}
+          isRefreshing={isRefreshingRate}
+          source={rateSource}
         />
       </div>
 
