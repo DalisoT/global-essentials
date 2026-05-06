@@ -46,8 +46,10 @@ function ImportSimulatorContent() {
   // Load rates and exchange rate on mount
   useEffect(() => {
     async function loadData() {
+      console.log('[ImportSimulator] loadData started');
       // Load shipping rates from database
       const { data: rates, error } = await getShippingRates();
+      console.log('[ImportSimulator] Shipping rates result:', { count: rates?.length, error });
       if (error || !rates || rates.length === 0) {
         toast.error('Failed to load shipping rates. Please add rates in settings.');
         setShippingRates([]);
@@ -57,13 +59,19 @@ function ImportSimulatorContent() {
 
       // Fetch live exchange rate from API
       setIsRefreshingRate(true);
-      const { rate, source } = await fetchLiveUSDToZMW();
-      setExchangeRate(rate);
-      setRateSource(source);
-      setDefaultExchangeRate(rate);
+      console.log('[ImportSimulator] Fetching live exchange rate...');
+      try {
+        const { rate, source } = await fetchLiveUSDToZMW();
+        console.log('[ImportSimulator] Got rate:', rate, 'source:', source);
+        setExchangeRate(rate);
+        setRateSource(source);
+        setDefaultExchangeRate(rate);
+      } catch (rateErr) {
+        console.error('[ImportSimulator] Rate fetch error:', rateErr);
+      }
       setIsRefreshingRate(false);
     }
-    loadData();
+    loadData().catch(err => console.error('[ImportSimulator] loadData error:', err));
   }, [setDefaultExchangeRate]);
 
   // Manual override sets source to manual
