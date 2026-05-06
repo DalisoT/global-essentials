@@ -86,3 +86,59 @@ export function getCachedRate(): number | null {
 export function clearRateCache(): void {
   inMemoryCache = null;
 }
+
+// Legacy exports for currency.ts compatibility
+export const SUPPORTED_CURRENCIES = [
+  { code: 'ZMW', symbol: 'K', name: 'Zambian Kwacha', flag: '🇿🇲' },
+  { code: 'USD', symbol: '$', name: 'US Dollar', flag: '🇺🇸' },
+];
+
+export function getCurrencyInfo(code: string) {
+  return SUPPORTED_CURRENCIES.find((c) => c.code === code) || SUPPORTED_CURRENCIES[0];
+}
+
+export interface ExchangeRates {
+  [currency: string]: number;
+}
+
+const LEGACY_CACHE_KEY = 'ge-exchange-rates';
+const LEGACY_CACHE_DURATION = 24 * 60 * 60 * 1000;
+
+interface LegacyCachedRates {
+  rates: ExchangeRates;
+  timestamp: number;
+}
+
+export async function fetchExchangeRates(): Promise<ExchangeRates> {
+  // Try to get fresh rate first
+  const liveResult = await fetchLiveUSDToZMW();
+  if (liveResult.source === 'api') {
+    return { ZMW: 1, USD: 1 / liveResult.rate };
+  }
+
+  // Fallback to cached/localStorage
+  if (typeof localStorage !== 'undefined') {
+    const cached = localStorage.getItem(LEGACY_CACHE_KEY);
+    if (cached) {
+      try {
+        const parsed: LegacyCachedRates = JSON.parse(cached);
+        if (Date.now() - parsed.timestamp < LEGACY_CACHE_DURATION) {
+          return parsed.rates;
+        }
+      } catch {}
+    }
+  }
+
+  return { ZMW: 1, USD: 1 / 26.0 };
+}
+
+export function convertCurrency(
+  amount: number,
+  from: string,
+  to: string,
+  rates: ExchangeRates
+): number {
+  if (from === to) return amount;
+  const inZMW = amount / rates[from];
+  return inZMW * rates[to];
+}
