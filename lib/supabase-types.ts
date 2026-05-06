@@ -65,6 +65,30 @@ export interface CatalogProduct {
   image_urls?: string[] | null;
 }
 
+export interface ShippingRate {
+  id: string;
+  shipping_type: string;
+  carrier: string;
+  transit_days: number;
+  rate_type: 'per_kg' | 'per_cbm' | 'per_ton';
+  tier_min_kg: number | null;
+  tier_max_kg: number | null;
+  rate: number;
+  volume_min_cbm: number | null;
+  volume_max_cbm: number | null;
+  description: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExchangeRateCustom {
+  id: string;
+  currency_pair: string;
+  rate: number;
+  updated_at: string;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -92,6 +116,16 @@ export interface Database {
         Row: Expense;
         Insert: Omit<Expense, 'id' | 'created_at' | 'updated_at'>;
         Update: Partial<Omit<Expense, 'id' | 'created_at'>>;
+      };
+      shipping_rates: {
+        Row: ShippingRate;
+        Insert: Omit<ShippingRate, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<ShippingRate, 'id' | 'created_at'>>;
+      };
+      exchange_rates_custom: {
+        Row: ExchangeRateCustom;
+        Insert: Omit<ExchangeRateCustom, 'id' | 'updated_at'>;
+        Update: Partial<Omit<ExchangeRateCustom, 'id'>>;
       };
     };
   };

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { getInventory, createProduct, updateProduct, deleteProduct, uploadProductImages } from '@/lib/actions/inventory';
 import { formatCurrency } from '@/lib/utils';
@@ -10,6 +11,7 @@ import type { Product } from '@/lib/supabase-types';
 import { Skeleton, SkeletonCard, EmptyState } from '@/components/ui/Skeleton';
 
 export default function InventoryPage() {
+  const searchParams = useSearchParams();
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -38,6 +40,23 @@ export default function InventoryPage() {
   useEffect(() => {
     loadProducts();
   }, [page]);
+
+  // Handle prefill params from Import Simulator
+  useEffect(() => {
+    const prefill = searchParams.get('prefill');
+    const name = searchParams.get('name');
+    const cost_price = searchParams.get('cost_price');
+    const selling_price = searchParams.get('selling_price');
+
+    if (prefill === 'true') {
+      if (name) setName(decodeURIComponent(name));
+      if (cost_price) setCostPrice(parseFloat(cost_price).toFixed(2));
+      if (selling_price) setSellingPrice(parseFloat(selling_price).toFixed(2));
+      setShowModal(true);
+      // Clear params after reading
+      window.history.replaceState({}, '', '/inventory');
+    }
+  }, [searchParams]);
 
   const loadProducts = async () => {
     setIsLoading(true);
