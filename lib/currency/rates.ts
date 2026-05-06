@@ -1,4 +1,7 @@
-const EXCHANGE_API_URL = 'https://api.exchangerate-api.com/v4/latest/USD';
+// Primary API: frankfurter.app (free, open source, reliable)
+// Fallback: open.er-api.com
+const PRIMARY_API_URL = 'https://api.frankfurter.app/latest?from=USD&to=ZMW';
+const FALLBACK_API_URL = 'https://open.er-api.com/v6/latest/USD';
 const CACHE_DURATION_MS = 4 * 60 * 60 * 1000; // 4 hours
 const ZMW_CODE = 'ZMW';
 
@@ -10,6 +13,38 @@ interface CachedRate {
 
 let inMemoryCache: CachedRate | null = null;
 
+async function tryPrimaryAPI(): Promise<number | null> {
+  try {
+    const res = await fetch(PRIMARY_API_URL, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`Primary API status: ${res.status}`);
+    const data = await res.json();
+    if (data.rates?.[ZMW_CODE]) {
+      console.log('[ExchangeRate] Primary API success, ZMW:', data.rates[ZMW_CODE]);
+      return data.rates[ZMW_CODE];
+    }
+    throw new Error('ZMW not in primary response');
+  } catch (err) {
+    console.log('[ExchangeRate] Primary API failed:', err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+async function tryFallbackAPI(): Promise<number | null> {
+  try {
+    const res = await fetch(FALLBACK_API_URL, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`Fallback API status: ${res.status}`);
+    const data = await res.json();
+    if (data.rates?.[ZMW_CODE]) {
+      console.log('[ExchangeRate] Fallback API success, ZMW:', data.rates[ZMW_CODE]);
+      return data.rates[ZMW_CODE];
+    }
+    throw new Error('ZMW not in fallback response');
+  } catch (err) {
+    console.log('[ExchangeRate] Fallback API failed:', err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
 export async function fetchLiveUSDToZMW(): Promise<{ rate: number; source: 'api' | 'cache' | 'fallback'; updatedAt?: string }> {
   // Return in-memory cached if still valid
   if (inMemoryCache && Date.now() - inMemoryCache.timestamp < CACHE_DURATION_MS) {
@@ -17,43 +52,31 @@ export async function fetchLiveUSDToZMW(): Promise<{ rate: number; source: 'api'
     return { rate: inMemoryCache.rate, source: 'cache' as const, updatedAt: new Date(inMemoryCache.timestamp).toISOString() };
   }
 
-  console.log('[ExchangeRate] Fetching fresh rate from API...');
-  try {
-    const res = await fetch(EXCHANGE_API_URL, {
-      headers: { 'Accept': 'application/json' },
-      cache: 'no-store' // Always get fresh data from API
-    });
+  console.log('[ExchangeRate] Fetching fresh rate from APIs...');
 
-    if (!res.ok) {
-      throw new Error(`API responded with status: ${res.status}`);
-    }
+  // Try primary API first
+  let rate = await tryPrimaryAPI();
 
-    const data = await res.json();
-    console.log('[ExchangeRate] API Response:', data);
+  // If primary fails, try fallback
+  if (rate === null) {
+    rate = await tryFallbackAPI();
+  }
 
-    if (!data.rates?.[ZMW_CODE]) {
-      throw new Error(`ZMW rate not found in API response. Available rates: ${Object.keys(data.rates || {}).join(', ')}`);
-    }
-
-    const rate = data.rates[ZMW_CODE];
-    console.log('[ExchangeRate] ZMW Rate:', rate);
-
-    // Update in-memory cache
-    inMemoryCache = { rate, timestamp: Date.now(), source: 'api' };
-
-    return { rate, source: 'api' as const, updatedAt: new Date().toISOString() };
-  } catch (err) {
-    console.error('[ExchangeRate] API Error:', err);
-    // Return cached value if available, otherwise fallback
+  // If both fail, use fallback value
+  if (rate === null) {
     if (inMemoryCache) {
-      console.log('[ExchangeRate] Falling back to cached rate:', inMemoryCache.rate);
+      console.log('[ExchangeRate] Both APIs failed, using cached rate:', inMemoryCache.rate);
       return { rate: inMemoryCache.rate, source: 'cache' as const };
     }
-
-    // Default fallback
-    console.log('[ExchangeRate] Falling back to default rate: 26.0');
+    console.log('[ExchangeRate] Both APIs failed, using default rate: 26.0');
     return { rate: 26.0, source: 'fallback' as const };
   }
+
+  // Update in-memory cache
+  inMemoryCache = { rate, timestamp: Date.now(), source: 'api' };
+  console.log('[ExchangeRate] Cached new rate:', rate);
+
+  return { rate, source: 'api' as const, updatedAt: new Date().toISOString() };
 }
 
 export function getCachedRate(): number | null {
