@@ -173,27 +173,27 @@ export default function LedgerPage() {
             {sales.map((sale) => (
               <div
                 key={sale.id}
-                className="flex items-center justify-between py-4 first:pt-0 last:pb-0"
+                className="flex items-center justify-between gap-2 py-4 first:pt-0 last:pb-0 min-w-0"
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 min-w-0">
                   <div
-                    className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                    className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
                       sale.payment_status === 'paid'
                         ? 'bg-tactical-neon/20'
                         : 'bg-tactical-orange/20'
                     }`}
                   >
                     <DollarSign
-                      className={`w-6 h-6 ${
+                      className={`w-5 h-5 ${
                         sale.payment_status === 'paid'
                           ? 'text-tactical-neon'
                           : 'text-tactical-orange'
                       }`}
                     />
                   </div>
-                  <div>
-                    <p className="font-bold">{sale.product?.name}</p>
-                    <p className="text-sm text-white/40">
+                  <div className="min-w-0">
+                    <p className="font-bold text-sm truncate">{sale.product?.name}</p>
+                    <p className="text-xs text-white/40 truncate">
                       {sale.client?.full_name}
                     </p>
                     <p className="text-xs text-white/30">
@@ -201,9 +201,9 @@ export default function LedgerPage() {
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 shrink-0">
                   <div className="text-right">
-                    <p className="text-lg font-black">
+                    <p className="text-sm font-black">
                       {formatCurrency(sale.total_amount)}
                     </p>
                     <span
@@ -219,29 +219,29 @@ export default function LedgerPage() {
                   <div className="flex gap-1">
                     <button
                       onClick={() => sale.client?.id && sale.client?.phone_number && setQuickActionsClient({ id: sale.client.id, full_name: sale.client.full_name, phone_number: sale.client.phone_number, saleId: sale.id, saleAmount: sale.total_amount })}
-                      className="p-2 rounded-lg bg-tactical-neon/10 hover:bg-tactical-neon/20 text-tactical-neon"
+                      className="p-1.5 rounded-lg bg-tactical-neon/10 hover:bg-tactical-neon/20 text-tactical-neon shrink-0"
                       title="Contact Client"
                     >
-                      <Phone className="w-4 h-4" />
+                      <Phone className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => handleViewReceipt(sale.id)}
-                      className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white"
+                      className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white shrink-0"
                       title="View Receipt"
                     >
-                      <Receipt className="w-4 h-4" />
+                      <Receipt className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => setEditingSale(sale)}
-                      className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white"
+                      className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white shrink-0"
                     >
-                      <Pencil className="w-4 h-4" />
+                      <Pencil className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => handleDelete(sale.id)}
-                      className="p-2 rounded-lg bg-tactical-red/10 hover:bg-tactical-red/20 text-tactical-red"
+                      className="p-1.5 rounded-lg bg-tactical-red/10 hover:bg-tactical-red/20 text-tactical-red shrink-0"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
