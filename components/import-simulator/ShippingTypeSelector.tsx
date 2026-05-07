@@ -56,12 +56,12 @@ export function ShippingTypeSelector({ selected, onChange, manualRate, onManualR
             type="number"
             value={manualRate ?? ''}
             onChange={(e) => onManualRateChange(e.target.value ? parseFloat(e.target.value) : null)}
-            placeholder="Enter rate — e.g. 13.90"
-            className="flex-1 h-11 px-3 bg-white/10 border border-white/20 rounded-lg text-white font-bold focus:outline-none focus:border-tactical-blue"
+            placeholder="e.g. 13.90"
+            className="min-w-0 flex-1 h-11 px-3 bg-white/10 border border-white/20 rounded-lg text-white font-bold focus:outline-none focus:border-tactical-blue"
             step="0.01"
           />
         </div>
-        <p className="text-xs text-white/30">
+        <p className="text-xs text-white/30 break-all">
           TODAY CARGO: Air 7D $13.90 | Air 14D $15.90 | Sea Small $3.90 | Sea CBM $339/CBM | Sea Heavy $449/t
         </p>
       </div>

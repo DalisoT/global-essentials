@@ -197,9 +197,9 @@ export default function SettingsPage() {
 
                   <div className="space-y-2">
                     {group.rates.map((rate) => (
-                      <div key={rate.id} className="flex items-center gap-3 bg-white/5 rounded-xl p-3">
-                        <div className="flex-1">
-                          <span className="text-sm text-white/60">
+                      <div key={rate.id} className="flex items-center gap-3 bg-white/5 rounded-xl p-3 min-w-0">
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm text-white/60 truncate block">
                             {rate.tier_max_kg ? `${rate.tier_min_kg}kg - ${rate.tier_max_kg}kg` : `${rate.tier_min_kg}kg+`}
                           </span>
                           <span className="text-xs text-white/30 ml-2">
@@ -208,13 +208,13 @@ export default function SettingsPage() {
                         </div>
 
                         {editingRateId === rate.id ? (
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 shrink-0">
                             <span className="text-white/40">$</span>
                             <input
                               type="number"
                               value={editValue}
                               onChange={(e) => setEditValue(e.target.value)}
-                              className="w-24 h-10 px-3 bg-white/10 border border-tactical-blue rounded-lg text-white font-bold focus:outline-none"
+                              className="w-20 h-10 px-2 bg-white/10 border border-tactical-blue rounded-lg text-white font-bold focus:outline-none text-sm"
                               step="0.01"
                               autoFocus
                             />

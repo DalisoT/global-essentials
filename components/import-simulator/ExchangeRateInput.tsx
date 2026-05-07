@@ -72,7 +72,7 @@ export function ExchangeRateInput({
         )}
       </div>
       <div className="flex gap-2">
-        <div className="flex-1 relative">
+        <div className="flex-1 relative min-w-0">
           {isEditing ? (
             <input
               type="number"

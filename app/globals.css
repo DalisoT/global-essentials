@@ -86,7 +86,7 @@
   }
 
   .card-tactical {
-    @apply bg-tactical-slate rounded-2xl border border-white/10 p-5;
+    @apply bg-tactical-slate rounded-2xl border border-white/10 p-5 overflow-hidden;
   }
 
   .glassmorphism {
