@@ -28,10 +28,16 @@ export async function createProduct(product: {
   const auth = await requireAuth();
   if ('error' in auth) return { data: null, error: auth.error };
   const supabase = auth.supabase;
+
+  if (!product.name?.trim()) return { data: null, error: 'Product name is required' };
+  if (isNaN(product.cost_price) || product.cost_price < 0) return { data: null, error: 'Invalid cost price' };
+  if (isNaN(product.selling_price) || product.selling_price < 0) return { data: null, error: 'Invalid selling price' };
+  if (isNaN(product.stock_level) || product.stock_level < 0) return { data: null, error: 'Invalid stock level' };
+
   const { data, error } = await supabase
     .from('products')
     .insert([{
-      name: product.name,
+      name: product.name.trim(),
       cost_price: product.cost_price,
       selling_price: product.selling_price,
       stock_level: product.stock_level,
