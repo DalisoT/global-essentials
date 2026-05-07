@@ -6,10 +6,11 @@ import { getSalesHistory } from '@/lib/actions/ledger';
 import { deleteSale, editSale } from '@/lib/actions/sales';
 import { getSaleReceipt } from '@/lib/actions/receipts';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { Search, DollarSign, BookOpen, Pencil, Trash2, X, ChevronLeft, ChevronRight, Receipt, Send } from 'lucide-react';
+import { Search, DollarSign, BookOpen, Pencil, Trash2, X, ChevronLeft, ChevronRight, Receipt, Send, Phone } from 'lucide-react';
 import type { Sale, Product, Client } from '@/lib/supabase-types';
 import { Skeleton, SkeletonTable, EmptyState } from '@/components/ui/Skeleton';
 import { ReceiptModal } from '@/components/ReceiptModal';
+import { ClientQuickActions } from '@/components/ClientQuickActions';
 
 export default function LedgerPage() {
   const [sales, setSales] = useState<(Sale & { product?: Product; client?: Client })[]>([]);
@@ -21,6 +22,7 @@ export default function LedgerPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
   const [receiptHtml, setReceiptHtml] = useState<string | null>(null);
+  const [quickActionsClient, setQuickActionsClient] = useState<{ id: string; full_name: string; phone_number: string; saleId?: string; saleAmount?: number } | null>(null);
   const PAGE_SIZE = 50;
 
   useEffect(() => {
@@ -216,6 +218,13 @@ export default function LedgerPage() {
                   </div>
                   <div className="flex gap-1">
                     <button
+                      onClick={() => sale.client?.id && sale.client?.phone_number && setQuickActionsClient({ id: sale.client.id, full_name: sale.client.full_name, phone_number: sale.client.phone_number, saleId: sale.id, saleAmount: sale.total_amount })}
+                      className="p-2 rounded-lg bg-tactical-neon/10 hover:bg-tactical-neon/20 text-tactical-neon"
+                      title="Contact Client"
+                    >
+                      <Phone className="w-4 h-4" />
+                    </button>
+                    <button
                       onClick={() => handleViewReceipt(sale.id)}
                       className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white"
                       title="View Receipt"
@@ -241,6 +250,16 @@ export default function LedgerPage() {
           </div>
         )}
       </div>
+
+      {/* Client Quick Actions */}
+      {quickActionsClient && (
+        <ClientQuickActions
+          client={quickActionsClient}
+          saleId={quickActionsClient.saleId}
+          saleAmount={quickActionsClient.saleAmount}
+          onClose={() => setQuickActionsClient(null)}
+        />
+      )}
 
       {/* Edit Modal */}
       {editingSale && (
