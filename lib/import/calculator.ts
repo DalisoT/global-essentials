@@ -11,6 +11,8 @@ export interface CalculationInput {
   exchangeRate: number;
   sellingPriceLocal?: number;
   markupPercent?: number;
+  // Optional manual shipping rate override (USD per kg or per CBM depending on type)
+  manualShippingRate?: number | null;
 }
 
 export interface CalculationResult {
@@ -42,12 +44,54 @@ export interface CalculationResult {
   profitIndicator: 'low' | 'medium' | 'high';
 }
 
+// Manual rate helpers based on TODAY CARGO pricing
+function getManualTierLabel(shippingType: ShippingTypeId, totalWeightKg: number): string {
+  switch (shippingType) {
+    case 'air_general_7days':
+    case 'air_sensitive_14days':
+      return totalWeightKg >= 10 ? '10kg+ (manual)' : '1kg+ (manual)';
+    case 'sea_small_parcel':
+      return 'per kg (manual)';
+    case 'sea_cbm':
+      return 'per CBM (manual)';
+    case 'sea_heavy':
+      return 'per ton (manual)';
+    default:
+      return 'manual';
+  }
+}
+
+function applyManualRate(totalWeightKg: number, totalVolumeCBM: number, shippingType: ShippingTypeId, rate: number): number {
+  switch (shippingType) {
+    case 'air_general_7days':
+    case 'air_sensitive_14days':
+    case 'sea_small_parcel':
+    case 'sea_heavy':
+      return totalWeightKg * rate;
+    case 'sea_cbm':
+      return totalVolumeCBM * rate;
+    default:
+      return totalWeightKg * rate;
+  }
+}
+
 export function calculateShippingCost(
   totalWeightKg: number,
   totalVolumeCBM: number,
   shippingType: ShippingTypeId,
-  rates: ShippingRate[]
+  rates: ShippingRate[],
+  manualRateOverride?: number | null
 ): { cost: number; rateUsed: number; tier: string } {
+  // Manual override takes precedence over database rates
+  if (manualRateOverride !== undefined && manualRateOverride !== null && manualRateOverride > 0) {
+    const tier = getManualTierLabel(shippingType, totalWeightKg);
+    return {
+      cost: applyManualRate(totalWeightKg, totalVolumeCBM, shippingType, manualRateOverride),
+      rateUsed: manualRateOverride,
+      tier,
+    };
+  }
+
   if (!rates || rates.length === 0) {
     return { cost: 0, rateUsed: 0, tier: 'rates_required' };
   }
@@ -137,7 +181,7 @@ export function calculateLandedCost(
   const totalWeightKg = input.weightPerUnitKg * input.quantity;
   const totalVolumeCBM = (input.volumePerUnitCBM || 0) * input.quantity;
 
-  const shipping = calculateShippingCost(totalWeightKg, totalVolumeCBM, input.shippingType, rates);
+  const shipping = calculateShippingCost(totalWeightKg, totalVolumeCBM, input.shippingType, rates, input.manualShippingRate);
   const shippingCostUSD = shipping.cost;
   const totalCostUSD = totalProductCostUSD + shippingCostUSD;
   const totalCostLocal = totalCostUSD * input.exchangeRate;

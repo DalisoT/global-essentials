@@ -8,6 +8,8 @@ interface ImportSimulatorPreferences {
   defaultExchangeRate: number;
   calculationMode: 'selling_price' | 'markup';
   defaultMarkupPercent: number;
+  // Manual shipping rate override (null = use database rates)
+  manualShippingRate: number | null;
 }
 
 interface ImportSimulatorStore extends ImportSimulatorPreferences {
@@ -16,6 +18,7 @@ interface ImportSimulatorStore extends ImportSimulatorPreferences {
   setDefaultExchangeRate: (rate: number) => void;
   setCalculationMode: (mode: 'selling_price' | 'markup') => void;
   setDefaultMarkupPercent: (percent: number) => void;
+  setManualShippingRate: (rate: number | null) => void;
 }
 
 export const useImportSimulatorStore = create<ImportSimulatorStore>()(
@@ -26,12 +29,14 @@ export const useImportSimulatorStore = create<ImportSimulatorStore>()(
       defaultExchangeRate: 26,
       calculationMode: 'markup',
       defaultMarkupPercent: 30,
+      manualShippingRate: null,
 
       setLastShippingType: (type) => set({ lastShippingType: type }),
       setLastExchangeRate: (rate) => set({ lastExchangeRate: rate }),
       setDefaultExchangeRate: (rate) => set({ defaultExchangeRate: rate }),
       setCalculationMode: (mode) => set({ calculationMode: mode }),
       setDefaultMarkupPercent: (percent) => set({ defaultMarkupPercent: percent }),
+      setManualShippingRate: (rate) => set({ manualShippingRate: rate }),
     }),
     {
       name: 'ge-import-simulator-prefs',

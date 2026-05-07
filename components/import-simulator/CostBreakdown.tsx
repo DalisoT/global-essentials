@@ -3,17 +3,29 @@
 import { formatCurrency } from '@/lib/utils';
 import type { CalculationResult } from '@/lib/import/calculator';
 import { cn } from '@/lib/utils';
+import { AlertTriangle } from 'lucide-react';
 
 interface CostBreakdownProps {
   result: CalculationResult;
 }
 
 export function CostBreakdown({ result }: CostBreakdownProps) {
+  const isMissingRates = result.shippingTier === 'rates_required' || result.shippingTier === 'rate_not_set';
+  const isZeroShipping = result.shippingCostUSD === 0;
+
   return (
     <div className="space-y-3">
       <h3 className="text-sm font-bold uppercase tracking-wider text-white/60">
         Cost Breakdown
       </h3>
+
+      {/* Warning for missing rates */}
+      {isMissingRates && (
+        <div className="flex items-center gap-2 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl text-yellow-500">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span className="text-xs">No shipping rates set. Enter a manual rate in Shipping Method.</span>
+        </div>
+      )}
 
       <div className="space-y-2">
         {/* Product Cost */}

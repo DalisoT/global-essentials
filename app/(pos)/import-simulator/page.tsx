@@ -22,7 +22,7 @@ function ImportSimulatorContent() {
   const searchParams = useSearchParams();
 
   // Store preferences
-  const { defaultExchangeRate, calculationMode, defaultMarkupPercent, setDefaultExchangeRate, setCalculationMode } = useImportSimulatorStore();
+  const { defaultExchangeRate, calculationMode, defaultMarkupPercent, setDefaultExchangeRate, setCalculationMode, manualShippingRate, setManualShippingRate } = useImportSimulatorStore();
 
   // Form state
   const [productName, setProductName] = useState('');
@@ -51,7 +51,8 @@ function ImportSimulatorContent() {
       const { data: rates, error } = await getShippingRates();
       console.log('[ImportSimulator] Shipping rates result:', { count: rates?.length, error });
       if (error || !rates || rates.length === 0) {
-        toast.error('Failed to load shipping rates. Please add rates in settings.');
+        // Don't show error toast — rates might just not be configured yet
+        // User can use manual rate override
         setShippingRates([]);
       } else {
         setShippingRates(rates);
@@ -123,10 +124,11 @@ function ImportSimulatorContent() {
       exchangeRate,
       sellingPriceLocal: calculationMode === 'selling_price' && sellingPriceInput ? parseFloat(sellingPriceInput) : undefined,
       markupPercent: calculationMode === 'markup' && markupPercentInput ? parseFloat(markupPercentInput) : undefined,
+      manualShippingRate: manualShippingRate,
     };
 
     return calculateLandedCost(input, shippingRates);
-  }, [productName, unitCostUSD, quantity, weightPerUnit, volumePerUnit, shippingType, exchangeRate, sellingPriceInput, markupPercentInput, calculationMode, shippingRates]);
+  }, [productName, unitCostUSD, quantity, weightPerUnit, volumePerUnit, shippingType, exchangeRate, sellingPriceInput, markupPercentInput, calculationMode, shippingRates, manualShippingRate]);
 
   const handleSaveExchangeRate = async () => {
     setIsSavingRate(true);
@@ -240,6 +242,9 @@ function ImportSimulatorContent() {
         <ShippingTypeSelector
           selected={shippingType}
           onChange={setShippingType}
+          manualRate={manualShippingRate}
+          onManualRateChange={setManualShippingRate}
+          hasRates={shippingRates.length > 0}
         />
       </div>
 
