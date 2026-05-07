@@ -12,16 +12,21 @@ interface ClientQuickActionsProps {
 }
 
 export function ClientQuickActions({ client, saleId, saleAmount, onClose }: ClientQuickActionsProps) {
-  const phone = client?.phone_number;
+  let phone = client?.phone_number;
   if (!phone) return null;
 
-  const message = saleAmount
-    ? `Hi ${client.full_name}, regarding your transaction of K${saleAmount.toFixed(2)} at Global Essentials.`
-    : `Hi ${client.full_name}, from Global Essentials.`;
+  // Normalize to Zambia format +260...
+  const digits = phone.replace(/\D/g, '');
+  const localNumber = digits.startsWith('0') ? digits.slice(1) : digits;
+  const fullNumber = `+260${localNumber}`;
 
-  const waLink = getWhatsAppLink(phone, message);
-  const telLink = `tel:${phone.replace(/\D/g, '')}`;
-  const smsLink = `sms:${phone.replace(/\D/g, '')}?body=${encodeURIComponent(message)}`;
+  const message = saleAmount
+    ? `Hi ${client?.full_name}, regarding your transaction of K${saleAmount.toFixed(2)} at Global Essentials.`
+    : `Hi ${client?.full_name}, from Global Essentials.`;
+
+  const waLink = getWhatsAppLink(fullNumber, message);
+  const telLink = `tel:${fullNumber}`;
+  const smsLink = `sms:${fullNumber}?body=${encodeURIComponent(message)}`;
 
   return (
     <>
@@ -38,7 +43,7 @@ export function ClientQuickActions({ client, saleId, saleAmount, onClose }: Clie
           <div className="flex items-center justify-between">
             <div>
               <p className="font-bold text-lg">{client?.full_name}</p>
-              <p className="text-sm text-white/40">{phone}</p>
+              <p className="text-sm text-white/40">{fullNumber}</p>
             </div>
             <button
               onClick={onClose}
