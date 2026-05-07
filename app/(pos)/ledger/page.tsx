@@ -258,6 +258,7 @@ export default function LedgerPage() {
           saleId={quickActionsClient.saleId}
           saleAmount={quickActionsClient.saleAmount}
           onClose={() => setQuickActionsClient(null)}
+          onUpdated={loadSales}
         />
       )}
 

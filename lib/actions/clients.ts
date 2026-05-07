@@ -156,3 +156,34 @@ export async function getClientsList() {
 
   return { data: data || [], error };
 }
+
+export async function updateClient(
+  id: string,
+  updates: { full_name?: string; phone_number?: string | null }
+): Promise<{ error?: string }> {
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const supabase = auth.supabase;
+
+  if (!updates.full_name?.trim() && updates.phone_number === undefined) {
+    return { error: 'Nothing to update' };
+  }
+
+  const updateData: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (updates.full_name) {
+    updateData.full_name = updates.full_name.trim();
+  }
+  if (updates.phone_number !== undefined) {
+    updateData.phone_number = updates.phone_number ? updates.phone_number.trim() : null;
+  }
+
+  const { error } = await supabase
+    .from('clients')
+    .update(updateData)
+    .eq('id', id);
+
+  return { error: error?.message ?? undefined };
+}
