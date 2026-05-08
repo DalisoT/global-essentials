@@ -8,7 +8,6 @@ interface ImportSimulatorPreferences {
   defaultExchangeRate: number;
   calculationMode: 'selling_price' | 'markup';
   defaultMarkupPercent: number;
-  // Manual shipping rate override (null = use database rates)
   manualShippingRate: number | null;
 }
 
