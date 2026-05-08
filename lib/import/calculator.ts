@@ -66,8 +66,10 @@ function applyManualRate(totalWeightKg: number, totalVolumeCBM: number, shipping
     case 'air_general_7days':
     case 'air_sensitive_14days':
     case 'sea_small_parcel':
-    case 'sea_heavy':
       return totalWeightKg * rate;
+    case 'sea_heavy':
+      // Rate is per ton, convert kg to tons
+      return (totalWeightKg / 1000) * rate;
     case 'sea_cbm':
       return totalVolumeCBM * rate;
     default:
@@ -161,8 +163,9 @@ export function calculateShippingCost(
     case 'sea_heavy': {
       const rate = rates.find(r => r.shipping_type === 'sea_heavy');
       if (!rate) return { cost: 0, rateUsed: 0, tier: 'rate_not_set' };
+      // Rate is per ton, convert kg to tons
       return {
-        cost: totalWeightKg * rate.rate,
+        cost: (totalWeightKg / 1000) * rate.rate,
         rateUsed: rate.rate,
         tier: 'per ton',
       };
