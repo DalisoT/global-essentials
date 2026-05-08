@@ -3,12 +3,13 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { getInventory, createProduct, updateProduct, deleteProduct, uploadProductImages } from '@/lib/actions/inventory';
+import { getInventory, createProduct, updateProduct, deleteProduct } from '@/lib/actions/inventory';
 import { formatCurrency } from '@/lib/utils';
 import { Package, Plus, X, Pencil, Trash2, Search, ImagePlus, Upload, XCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Product } from '@/lib/supabase-types';
 import { Skeleton, SkeletonCard, EmptyState } from '@/components/ui/Skeleton';
+import { uploadProductImageDirect } from '@/lib/upload';
 
 function InventoryContent() {
   const searchParams = useSearchParams();
@@ -114,27 +115,19 @@ function InventoryContent() {
 
     if (imageFiles.length > 0) {
       setIsUploadingImages(true);
-      const imageDataArray = await Promise.all(
-        imageFiles.map(
-          (file) =>
-            new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result as string);
-              reader.onerror = reject;
-              reader.readAsDataURL(file);
-            })
-        )
+      const results = await Promise.all(
+        imageFiles.map((file) => uploadProductImageDirect(file))
       );
-      const { data: uploadedUrls, error: uploadError } = await uploadProductImages(imageDataArray);
       setIsUploadingImages(false);
 
-      if (uploadError) {
-        toast.error('Failed to upload images');
+      const failed = results.filter((r) => r.error);
+      if (failed.length > 0) {
+        toast.error(`Failed to upload ${failed.length} image(s): ${failed[0].error}`);
         setIsSubmitting(false);
         return;
       }
 
-      finalImageUrls = [...finalImageUrls, ...(uploadedUrls || [])];
+      finalImageUrls = [...finalImageUrls, ...results.map((r) => r.url)];
     }
 
     const productData = {
