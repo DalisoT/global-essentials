@@ -4,13 +4,13 @@ import { createServerSupabaseClient, requireAuth } from '@/lib/supabase-server';
 import { MIN_INSTALLMENT_MONTHS, MAX_INSTALLMENT_MONTHS } from '@/lib/config';
 
 export async function createSale({
-  product_id,
+  items,
   client_id,
   payment_method,
   installment_duration,
   installments,
 }: {
-  product_id: string;
+  items: Array<{ product_id: string; quantity: number }>;
   client_id: string;
   payment_method: 'cash' | 'pay-slow';
   installment_duration?: number;
@@ -19,9 +19,10 @@ export async function createSale({
   const auth = await requireAuth();
   if ('error' in auth) return { data: null, error: auth.error };
   const supabase = auth.supabase;
+
   // Validate input
-  if (!product_id || typeof product_id !== 'string') {
-    return { error: 'Invalid product_id' };
+  if (!items || items.length === 0) {
+    return { error: 'No items provided' };
   }
   if (!client_id || typeof client_id !== 'string') {
     return { error: 'Invalid client_id' };
@@ -33,23 +34,27 @@ export async function createSale({
     return { error: `Installment duration must be between ${MIN_INSTALLMENT_MONTHS} and ${MAX_INSTALLMENT_MONTHS} months` };
   }
 
-  // Get product details
-  const { data: product, error: productError } = await supabase
+  // Validate all products exist and have sufficient stock
+  const productIds = items.map((i) => i.product_id);
+  const { data: products } = await supabase
     .from('products')
-    .select('*')
-    .eq('id', product_id)
-    .single();
+    .select('id, name, stock_level, selling_price')
+    .in('id', productIds);
 
-  if (productError || !product) {
-    return { error: 'Product not found' };
+  if (!products || products.length !== items.length) {
+    return { error: 'Some products not found' };
   }
 
-  if (product.stock_level <= 0) {
-    return { error: 'Product out of stock' };
+  for (const item of items) {
+    const product = products.find((p) => p.id === item.product_id);
+    if (!product) return { error: `Product not found: ${item.product_id}` };
+    if (product.stock_level < item.quantity) {
+      return { error: `Insufficient stock for ${product.name}. Available: ${product.stock_level}` };
+    }
   }
 
-  const totalAmount = product.selling_price;
   const paymentStatus = payment_method === 'cash' ? 'paid' : 'pending';
+  const createdSales: Array<{ id: string; total_amount: number }> = [];
 
   // Validate custom installments
   if (installments && installments.length > 0) {
@@ -71,88 +76,92 @@ export async function createSale({
       }
     }
     const sum = installments.reduce((s, i) => s + i.amount_due, 0);
+    const totalAmount = items.reduce((sum, item) => {
+      const product = products.find((p) => p.id === item.product_id)!;
+      return sum + product.selling_price * item.quantity;
+    }, 0);
     if (sum !== totalAmount) {
       return { error: `Installments must sum to ${totalAmount}, got ${sum}` };
     }
   }
 
-  // Create sale
-  const { data: sale, error: saleError } = await supabase
-    .from('sales')
-    .insert([{
-      product_id,
-      client_id,
-      total_amount: totalAmount,
-      payment_status: paymentStatus,
-      payment_method,
-    }])
-    .select()
-    .single();
+  // Create a sale for each line item
+  for (const item of items) {
+    const product = products.find((p) => p.id === item.product_id)!;
+    const totalAmount = product.selling_price * item.quantity;
 
-  if (saleError) return { error: saleError.message };
+    const { data: sale, error: saleError } = await supabase
+      .from('sales')
+      .insert([{
+        product_id: item.product_id,
+        client_id,
+        total_amount: totalAmount,
+        payment_status: paymentStatus,
+        payment_method,
+      }])
+      .select()
+      .single();
 
-  // If Pay-Slow, create installments
-  if (payment_method === 'pay-slow') {
-    // Custom installments provided (custom plan)
-    if (installments && installments.length > 0) {
-      const processed = installments.map((inst, idx) => {
-        const dueDate = new Date(inst.due_date);
+    if (saleError) return { error: saleError.message };
+    if (!sale) return { error: 'Failed to create sale' };
+
+    createdSales.push({ id: sale.id, total_amount: totalAmount });
+
+    // If Pay-Slow, create installments for this sale
+    if (payment_method === 'pay-slow') {
+      if (installments && installments.length > 0) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const isToday = dueDate.toISOString().split('T')[0] === today.toISOString().split('T')[0];
-        return {
-          sale_id: sale.id,
-          amount_due: inst.amount_due,
-          due_date: inst.due_date,
-          is_paid: idx === 0 && isToday,
-          paid_at: (idx === 0 && isToday) ? new Date().toISOString() : null,
-        };
-      });
-      const { error } = await supabase.from('installments').insert(processed);
-      if (error) return { error: error.message };
-    }
-    // Preset duration (existing equal-split logic)
-    else if (installment_duration) {
-      const duration = installment_duration;
-      const upfront = Math.ceil(totalAmount / duration);
-      const monthly = Math.floor(totalAmount / duration);
+        const processed = installments.map((inst, idx) => {
+          const dueDate = new Date(inst.due_date);
+          const isToday = dueDate.toISOString().split('T')[0] === today.toISOString().split('T')[0];
+          return {
+            sale_id: sale.id,
+            amount_due: inst.amount_due,
+            due_date: inst.due_date,
+            is_paid: idx === 0 && isToday,
+            paid_at: (idx === 0 && isToday) ? new Date().toISOString() : null,
+          };
+        });
+        const { error } = await supabase.from('installments').insert(processed);
+        if (error) return { error: error.message };
+      } else if (installment_duration) {
+        const duration = installment_duration;
+        const upfront = Math.ceil(totalAmount / duration);
+        const monthly = Math.floor(totalAmount / duration);
 
-      const presetInstallments = [];
-
-      // First installment (paid upfront)
-      presetInstallments.push({
-        sale_id: sale.id,
-        amount_due: upfront,
-        due_date: new Date().toISOString().split('T')[0],
-        is_paid: true,
-        paid_at: new Date().toISOString(),
-      });
-
-      // Remaining installments
-      for (let i = 1; i < duration; i++) {
-        const dueDate = new Date();
-        dueDate.setMonth(dueDate.getMonth() + i);
+        const presetInstallments = [];
         presetInstallments.push({
           sale_id: sale.id,
-          amount_due: monthly,
-          due_date: dueDate.toISOString().split('T')[0],
-          is_paid: false,
-          paid_at: null,
+          amount_due: upfront,
+          due_date: new Date().toISOString().split('T')[0],
+          is_paid: true,
+          paid_at: new Date().toISOString(),
         });
+        for (let i = 1; i < duration; i++) {
+          const dueDate = new Date();
+          dueDate.setMonth(dueDate.getMonth() + i);
+          presetInstallments.push({
+            sale_id: sale.id,
+            amount_due: monthly,
+            due_date: dueDate.toISOString().split('T')[0],
+            is_paid: false,
+            paid_at: null,
+          });
+        }
+        const { error } = await supabase.from('installments').insert(presetInstallments);
+        if (error) return { error: error.message };
       }
-
-      const { error } = await supabase.from('installments').insert(presetInstallments);
-      if (error) return { error: error.message };
     }
+
+    // Decrement stock
+    await supabase
+      .from('products')
+      .update({ stock_level: product.stock_level - item.quantity })
+      .eq('id', item.product_id);
   }
 
-  // Decrement stock
-  await supabase
-    .from('products')
-    .update({ stock_level: product.stock_level - 1 })
-    .eq('id', product_id);
-
-  return { data: sale, error: null };
+  return { data: createdSales, error: null };
 }
 
 export async function getProducts() {

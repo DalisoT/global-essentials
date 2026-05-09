@@ -2,7 +2,7 @@ import { saveOfflineSale, getPendingSales, markSaleSynced } from './db';
 import type { OfflineSale } from './db';
 
 export async function queueSale(saleData: {
-  product_id: string;
+  items: Array<{ product_id: string; quantity: number }>;
   client_id: string;
   payment_method: 'cash' | 'pay-slow';
   installment_duration?: number;
@@ -21,7 +21,7 @@ export async function queueSale(saleData: {
 
 export async function syncPendingSales(
   createSaleAction: (data: {
-    product_id: string;
+    items: Array<{ product_id: string; quantity: number }>;
     client_id: string;
     payment_method: 'cash' | 'pay-slow';
     installment_duration?: number;
@@ -34,7 +34,20 @@ export async function syncPendingSales(
 
   for (const sale of pending) {
     try {
-      const result = await createSaleAction(sale.data);
+      // Support both new multi-item format and legacy single-item format
+      const saleData = sale.data;
+      const actionData = {
+        items: saleData.items ?? (saleData.product_id ? [{ product_id: saleData.product_id, quantity: 1 }] : []),
+        client_id: saleData.client_id,
+        payment_method: saleData.payment_method,
+        installment_duration: saleData.installment_duration,
+        installments: saleData.installments,
+      };
+      if (actionData.items.length === 0) {
+        failed++;
+        continue;
+      }
+      const result = await createSaleAction(actionData);
       if (result.error) {
         failed++;
       } else {

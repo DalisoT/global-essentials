@@ -1,42 +1,30 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { createSale, getProducts, getClients, createClient } from '@/lib/actions/sales';
+import { createSale } from '@/lib/actions/sales';
+import { getSaleReceipt } from '@/lib/actions/receipts';
 import { queueSale } from '@/lib/offline/sync';
 import { useOffline } from '@/hooks/useOffline';
-import { getSaleReceipt } from '@/lib/actions/receipts';
-import { formatCurrency } from '@/lib/utils';
 import { ReceiptModal } from '@/components/ReceiptModal';
-import {
-  Package,
-  User,
-  CreditCard,
-  Clock,
-  ChevronRight,
-  Plus,
-  X,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { POSCart } from '@/components/pos/POSCart';
+import { ProductGrid } from '@/components/pos/ProductGrid';
+import { X } from 'lucide-react';
 import type { Product, Client } from '@/lib/supabase-types';
+
+interface CartItem {
+  product: Product;
+  quantity: number;
+}
 
 export default function NewSalePage() {
   const router = useRouter();
   const { isOnline } = useOffline();
-  const [step, setStep] = useState(1);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [items, setItems] = useState<CartItem[]>([]);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'pay-slow'>('cash');
   const [installmentDuration, setInstallmentDuration] = useState(3);
-  const [showNewClient, setShowNewClient] = useState(false);
-  const [newClientName, setNewClientName] = useState('');
-  const [newClientPhone, setNewClientPhone] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [receiptHtml, setReceiptHtml] = useState<string | null>(null);
-  const [lastSaleId, setLastSaleId] = useState<string | null>(null);
   const [showCustomPlan, setShowCustomPlan] = useState(false);
   const [customInstallments, setCustomInstallments] = useState<Array<{
     amount: number;
@@ -44,59 +32,78 @@ export default function NewSalePage() {
     dateMode: 'calendar' | 'relative';
     relativeOption: string;
   }>>([{ amount: 0, dueDate: '', dateMode: 'calendar', relativeOption: '' }]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [receiptHtml, setReceiptHtml] = useState<string | null>(null);
+  const [lastSaleId, setLastSaleId] = useState<string | null>(null);
 
-  useEffect(() => {
-    getProducts().then(({ data }) => data && setProducts(data));
-    getClients().then(({ data }) => data && setClients(data));
-  }, []);
+  const total = items.reduce(
+    (sum, item) => sum + item.product.selling_price * item.quantity,
+    0
+  );
 
-  const handleAddClient = async () => {
-    if (!newClientName || !newClientPhone) {
-      toast.error('Please fill in all fields');
-      return;
-    }
-
-    const { error } = await createClient(newClientName, newClientPhone);
-    if (error) {
-      toast.error('Failed to add client');
-      return;
-    }
-
-    // Reload full client list instead of just appending
-    const { data: updatedClients } = await getClients();
-    if (updatedClients) {
-      setClients(updatedClients as Client[]);
-      // Select the newly created client (last in list alphabetically)
-      const newClient = updatedClients[updatedClients.length - 1];
-      setSelectedClient(newClient as Client);
-    }
-
-    setShowNewClient(false);
-    setNewClientName('');
-    setNewClientPhone('');
-    toast.success('Client added successfully');
+  const handleAddProduct = (product: Product) => {
+    setItems((prev) => {
+      const existing = prev.find((i) => i.product.id === product.id);
+      if (existing) {
+        if (existing.quantity >= product.stock_level) {
+          toast.error(`Max stock reached (${product.stock_level})`);
+          return prev;
+        }
+        return prev.map((i) =>
+          i.product.id === product.id
+            ? { ...i, quantity: i.quantity + 1 }
+            : i
+        );
+      }
+      return [...prev, { product, quantity: 1 }];
+    });
   };
 
-  const handleSubmit = async () => {
-    if (!selectedProduct || !selectedClient) {
-      toast.error('Please select product and client');
+  const handleRemoveItem = (productId: string) => {
+    setItems((prev) => prev.filter((i) => i.product.id !== productId));
+  };
+
+  const handleUpdateQuantity = (productId: string, quantity: number) => {
+    if (quantity <= 0) {
+      handleRemoveItem(productId);
+      return;
+    }
+    setItems((prev) =>
+      prev.map((i) => (i.product.id === productId ? { ...i, quantity } : i))
+    );
+  };
+
+  const handleAddCustomInstallment = () => {
+    setCustomInstallments((prev) => [
+      ...prev,
+      { amount: 0, dueDate: new Date().toISOString().split('T')[0], dateMode: 'calendar', relativeOption: '' },
+    ]);
+  };
+
+  const handleRemoveCustomInstallment = (idx: number) => {
+    setCustomInstallments((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleCompleteSale = async () => {
+    if (items.length === 0 || !selectedClient) {
+      toast.error('Please add items and select a client');
       return;
     }
 
     setIsSubmitting(true);
 
     const salePayload = {
-      product_id: selectedProduct.id,
+      items: items.map((i) => ({
+        product_id: i.product.id,
+        quantity: i.quantity,
+      })),
       client_id: selectedClient.id,
       payment_method: paymentMethod,
       ...(showCustomPlan
-        ? { installments: customInstallments
-            .filter(inst => inst.amount > 0)
-            .map(inst => ({ amount_due: inst.amount, due_date: inst.dueDate })) }
+        ? { installments: customInstallments.filter((inst) => inst.amount > 0).map((inst) => ({ amount_due: inst.amount, due_date: inst.dueDate })) }
         : { installment_duration: paymentMethod === 'pay-slow' ? installmentDuration : undefined }),
     };
 
-    // Use offline queue if not online
     if (!isOnline) {
       await queueSale(salePayload);
       setIsSubmitting(false);
@@ -105,470 +112,84 @@ export default function NewSalePage() {
       return;
     }
 
-    const { data: saleData, error } = await createSale(salePayload);
+    const { data: sales, error } = await createSale(salePayload);
 
     setIsSubmitting(false);
 
-    if (error) {
-      toast.error(error);
+    if (error || !sales || sales.length === 0) {
+      toast.error(error || 'Failed to complete sale');
       return;
     }
 
     toast.success('Sale completed successfully!');
 
-    // Fetch receipt and show modal
-    if (saleData?.id) {
-      setLastSaleId(saleData.id);
-      const { data: receiptHtml } = await getSaleReceipt(saleData.id);
-      if (receiptHtml) {
-        setReceiptHtml(receiptHtml);
-        return; // Don't navigate yet, show receipt first
-      }
+    // Show receipt for first sale
+    const firstSale = sales[0];
+    setLastSaleId(firstSale.id);
+    const { data: receiptHtml } = await getSaleReceipt(firstSale.id);
+    if (receiptHtml) {
+      setReceiptHtml(receiptHtml);
+    } else {
+      router.push('/dashboard');
     }
-
-    router.push('/dashboard');
   };
 
-  const monthlyPayment = selectedProduct
-    ? Math.floor(selectedProduct.selling_price / installmentDuration)
-    : 0;
-
-  const getCustomTotal = () =>
-    customInstallments.reduce((sum, inst) => sum + (inst.amount || 0), 0);
+  const addedProductIds = new Set(items.map((i) => i.product.id));
 
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen bg-black flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <header className="sticky top-0 z-40 bg-black/80 backdrop-blur-xl border-b border-white/10 px-4 py-3 flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-2xl text-tactical text-tactical">NEW SALE</h1>
-          <p className="text-white/60 text-sm uppercase tracking-wider">
-            Step {step} of 3
+          <h1 className="text-lg font-black uppercase tracking-tight">New Sale</h1>
+          <p className="text-xs text-white/40">
+            {items.length} items · {formatTotal(total)}
           </p>
         </div>
         <button
           onClick={() => router.back()}
           className="p-2 rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
         >
-          <X className="w-6 h-6" />
+          <X className="w-5 h-5" />
         </button>
+      </header>
+
+      {/* Main: Product Grid */}
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        <ProductGrid onAddProduct={handleAddProduct} addedProductIds={addedProductIds} />
       </div>
 
-      {/* Progress Bar */}
-      <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+      {/* Fixed Bottom Cart Sidebar */}
+      <div className="fixed inset-x-0 bottom-0 top-0 z-50 flex">
+        {/* Backdrop */}
         <div
-          className="h-full bg-tactical-blue transition-all duration-300"
-          style={{ width: `${(step / 3) * 100}%` }}
+          className="flex-1 bg-black/60"
+          onClick={() => router.back()}
         />
+
+        {/* Cart Sidebar — slides from right */}
+        <div className="w-full max-w-sm bg-tactical-slate flex flex-col">
+          <POSCart
+            items={items}
+            onRemoveItem={handleRemoveItem}
+            onUpdateQuantity={handleUpdateQuantity}
+            selectedClient={selectedClient}
+            onSelectClient={setSelectedClient}
+            paymentMethod={paymentMethod}
+            onPaymentMethodChange={setPaymentMethod}
+            installmentDuration={installmentDuration}
+            onInstallmentDurationChange={setInstallmentDuration}
+            showCustomPlan={showCustomPlan}
+            onShowCustomPlanChange={setShowCustomPlan}
+            customInstallments={customInstallments}
+            onCustomInstallmentsChange={setCustomInstallments}
+            onAddCustomInstallment={handleAddCustomInstallment}
+            onRemoveCustomInstallment={handleRemoveCustomInstallment}
+            onCompleteSale={handleCompleteSale}
+            isSubmitting={isSubmitting}
+          />
+        </div>
       </div>
-
-      {/* Step 1: Select Product */}
-      {step === 1 && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <Package className="w-6 h-6 text-tactical-blue" />
-            <h2 className="text-lg font-bold uppercase tracking-tight">
-              Select Product
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 gap-3">
-            {products.map((product) => (
-              <button
-                key={product.id}
-                onClick={() => setSelectedProduct(product)}
-                className={cn(
-                  'card-tactical flex items-center justify-between hover:bg-white/5 transition-all',
-                  selectedProduct?.id === product.id && 'border-tactical-blue'
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-14 h-14 rounded-xl bg-white/5 flex items-center justify-center">
-                    <Package className="w-7 h-7 text-white/40" />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-bold">{product.name}</p>
-                    <p className="text-xs text-white/40 uppercase tracking-wide">
-                      Stock: {product.stock_level}
-                    </p>
-                  </div>
-                </div>
-                <p className="text-xl font-black text-tactical-neon">
-                  {formatCurrency(product.selling_price)}
-                </p>
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={() => setStep(2)}
-            disabled={!selectedProduct}
-            className={cn(
-              'w-full btn-tactical flex items-center justify-center gap-2 mt-4',
-              !selectedProduct && 'opacity-50 cursor-not-allowed'
-            )}
-          >
-            Next <ChevronRight className="w-5 h-5" />
-          </button>
-        </div>
-      )}
-
-      {/* Step 2: Select Client */}
-      {step === 2 && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <User className="w-6 h-6 text-tactical-blue" />
-            <h2 className="text-lg font-bold uppercase tracking-tight">
-              Select Client
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 gap-3 max-h-64 overflow-y-auto">
-            {clients.map((client) => (
-              <button
-                key={client.id}
-                onClick={() => setSelectedClient(client)}
-                className={cn(
-                  'card-tactical flex items-center gap-3 hover:bg-white/5 transition-all',
-                  selectedClient?.id === client.id && 'border-tactical-blue'
-                )}
-              >
-                <div className="w-12 h-12 rounded-full bg-tactical-blue/20 flex items-center justify-center">
-                  <User className="w-6 h-6 text-tactical-blue" />
-                </div>
-                <div className="text-left">
-                  <p className="font-bold">{client.full_name}</p>
-                  <p className="text-xs text-white/40">{client.phone_number}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-
-          {showNewClient ? (
-            <div className="card-tactical space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold uppercase tracking-tight">New Client</h3>
-                <button onClick={() => setShowNewClient(false)}>
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <input
-                type="text"
-                placeholder="Full Name"
-                value={newClientName}
-                onChange={(e) => setNewClientName(e.target.value)}
-                className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/40"
-              />
-              <input
-                type="tel"
-                placeholder="Phone Number"
-                value={newClientPhone}
-                onChange={(e) => setNewClientPhone(e.target.value)}
-                className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/40"
-              />
-              <button onClick={handleAddClient} className="w-full btn-tactical">
-                Add Client
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowNewClient(true)}
-              className="w-full btn-tactical-secondary flex items-center justify-center gap-2"
-            >
-              <Plus className="w-5 h-5" /> Add New Client
-            </button>
-          )}
-
-          <div className="flex gap-3">
-            <button onClick={() => setStep(1)} className="flex-1 btn-tactical-secondary">
-              Back
-            </button>
-            <button
-              onClick={() => setStep(3)}
-              disabled={!selectedClient}
-              className={cn(
-                'flex-1 btn-tactical',
-                !selectedClient && 'opacity-50 cursor-not-allowed'
-              )}
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Step 3: Payment Method */}
-      {step === 3 && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <CreditCard className="w-6 h-6 text-tactical-blue" />
-            <h2 className="text-lg font-bold uppercase tracking-tight">
-              Payment Method
-            </h2>
-          </div>
-
-          {/* Order Summary */}
-          <div className="card-tactical bg-tactical-blue/10 border-tactical-blue/30">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-white/60 mb-3">
-              Order Summary
-            </h3>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-white/60">Product</span>
-              <span className="font-semibold">{selectedProduct?.name}</span>
-            </div>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-white/60">Client</span>
-              <span className="font-semibold">{selectedClient?.full_name}</span>
-            </div>
-            <div className="border-t border-white/10 my-3" />
-            <div className="flex items-center justify-between">
-              <span className="text-white/60">Total</span>
-              <span className="text-2xl font-black text-tactical-neon">
-                {formatCurrency(selectedProduct?.selling_price || 0)}
-              </span>
-            </div>
-          </div>
-
-          {/* Payment Options */}
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => setPaymentMethod('cash')}
-              className={cn(
-                'card-tactical flex flex-col items-center gap-2 p-4 transition-all',
-                paymentMethod === 'cash' && 'border-tactical-neon bg-tactical-neon/10'
-              )}
-            >
-              <CreditCard className="w-8 h-8" />
-              <span className="font-bold uppercase tracking-tight">Cash</span>
-            </button>
-            <button
-              onClick={() => setPaymentMethod('pay-slow')}
-              className={cn(
-                'card-tactical flex flex-col items-center gap-2 p-4 transition-all',
-                paymentMethod === 'pay-slow' && 'border-tactical-orange bg-tactical-orange/10'
-              )}
-            >
-              <Clock className="w-8 h-8" />
-              <span className="font-bold uppercase tracking-tight">Pay-Slow</span>
-            </button>
-          </div>
-
-          {/* Installment Duration */}
-          {paymentMethod === 'pay-slow' && (
-            <div className="card-tactical space-y-4">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-white/60">
-                Select Duration
-              </h3>
-              <div className="grid grid-cols-3 gap-2">
-                {[2, 3, 4, 6, 8, 12].map((months) => (
-                  <button
-                    key={months}
-                    onClick={() => { setInstallmentDuration(months); setShowCustomPlan(false); }}
-                    className={cn(
-                      'py-3 rounded-xl font-bold uppercase tracking-tight transition-all',
-                      installmentDuration === months && !showCustomPlan
-                        ? 'bg-tactical-blue text-white'
-                        : 'bg-white/5 text-white/60 hover:bg-white/10'
-                    )}
-                  >
-                    {months}mo
-                  </button>
-                ))}
-                <button
-                  onClick={() => { setInstallmentDuration(0); setShowCustomPlan(true); }}
-                  className={cn(
-                    'py-3 rounded-xl font-bold uppercase tracking-tight transition-all',
-                    showCustomPlan
-                      ? 'border-tactical-purple bg-tactical-purple/10 text-white'
-                      : 'bg-white/5 text-white/60 hover:bg-white/10'
-                  )}
-                >
-                  Custom
-                </button>
-              </div>
-              <div className="bg-white/5 rounded-xl p-4 space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-white/60">Upfront (1st month)</span>
-                  <span className="font-semibold text-tactical-neon">
-                    {formatCurrency(monthlyPayment)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-white/60">Remaining {installmentDuration - 1} months</span>
-                  <span className="font-semibold">
-                    {formatCurrency(monthlyPayment)}/mo
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Custom Payment Plan Builder */}
-          {paymentMethod === 'pay-slow' && showCustomPlan && (
-            <div className="card-tactical space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-white/60">
-                  Custom Payment Plan
-                </h3>
-                <span className="text-xs text-white/40">
-                  {customInstallments.filter(i => i.amount > 0).length} installments
-                </span>
-              </div>
-
-              {/* Installment rows */}
-              <div className="space-y-3 max-h-64 overflow-y-auto">
-                {customInstallments.map((inst, idx) => (
-                  <div key={idx} className="flex gap-2 items-center">
-                    <span className="text-xs text-white/40 w-6">#{idx + 1}</span>
-
-                    {/* Amount input */}
-                    <input
-                      type="number"
-                      value={inst.amount || ''}
-                      onChange={(e) => {
-                        const updated = [...customInstallments];
-                        updated[idx].amount = parseFloat(e.target.value) || 0;
-                        setCustomInstallments(updated);
-                      }}
-                      className="flex-1 h-10 px-3 bg-white/5 border border-white/10 rounded-lg text-white"
-                      placeholder="Amount"
-                    />
-
-                    {/* Date mode toggle */}
-                    <div className="flex gap-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const updated = [...customInstallments];
-                          updated[idx].dateMode = 'calendar';
-                          setCustomInstallments(updated);
-                        }}
-                        className={cn(
-                          'p-2 rounded',
-                          inst.dateMode === 'calendar' ? 'bg-tactical-blue' : 'bg-white/5'
-                        )}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const updated = [...customInstallments];
-                          updated[idx].dateMode = 'relative';
-                          setCustomInstallments(updated);
-                        }}
-                        className={cn(
-                          'p-2 rounded',
-                          inst.dateMode === 'relative' ? 'bg-tactical-blue' : 'bg-white/5'
-                        )}
-                      >
-                        <Clock className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    {/* Date input based on mode */}
-                    {inst.dateMode === 'calendar' ? (
-                      <input
-                        type="date"
-                        value={inst.dueDate}
-                        onChange={(e) => {
-                          const updated = [...customInstallments];
-                          updated[idx].dueDate = e.target.value;
-                          setCustomInstallments(updated);
-                        }}
-                        className="h-10 px-3 bg-white/5 border border-white/10 rounded-lg text-white"
-                      />
-                    ) : (
-                      <select
-                        value={inst.relativeOption}
-                        onChange={(e) => {
-                          const updated = [...customInstallments];
-                          updated[idx].relativeOption = e.target.value;
-                          const daysMap: Record<string, number> = {
-                            'today': 0,
-                            '7days': 7,
-                            '2weeks': 14,
-                            '1month': 30,
-                            '2months': 60,
-                          };
-                          const days = daysMap[e.target.value] || 0;
-                          const date = new Date();
-                          date.setDate(date.getDate() + days);
-                          updated[idx].dueDate = date.toISOString().split('T')[0];
-                          setCustomInstallments(updated);
-                        }}
-                        className="h-10 px-3 bg-white/5 border border-white/10 rounded-lg text-white"
-                      >
-                        <option value="">Select...</option>
-                        <option value="today">Today</option>
-                        <option value="7days">In 7 days</option>
-                        <option value="2weeks">In 2 weeks</option>
-                        <option value="1month">In 1 month</option>
-                        <option value="2months">In 2 months</option>
-                      </select>
-                    )}
-
-                    {/* Remove button */}
-                    {customInstallments.length > 2 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCustomInstallments(prev => prev.filter((_, i) => i !== idx));
-                        }}
-                        className="p-2 hover:bg-white/10 rounded"
-                      >
-                        <X className="w-4 h-4 text-white/40" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* Add installment button */}
-              {customInstallments.length < 10 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCustomInstallments(prev => [
-                      ...prev,
-                      { amount: 0, dueDate: new Date().toISOString().split('T')[0], dateMode: 'calendar', relativeOption: '' }
-                    ]);
-                  }}
-                  className="w-full py-2 border border-dashed border-white/20 rounded-lg text-white/60 text-sm hover:bg-white/5"
-                >
-                  + Add Installment
-                </button>
-              )}
-
-              {/* Running total validation */}
-              <div className={cn(
-                'flex items-center justify-between p-3 rounded-lg',
-                getCustomTotal() === selectedProduct?.selling_price
-                  ? 'bg-green-500/20 text-green-400'
-                  : 'bg-red-500/20 text-red-400'
-              )}>
-                <span className="text-sm">Total</span>
-                <span className="font-bold">
-                  {formatCurrency(getCustomTotal())} / {formatCurrency(selectedProduct?.selling_price || 0)}
-                </span>
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-3">
-            <button onClick={() => setStep(2)} className="flex-1 btn-tactical-secondary">
-              Back
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              className={cn(
-                'flex-1 btn-tactical',
-                isSubmitting && 'opacity-50 cursor-not-allowed'
-              )}
-            >
-              {isSubmitting ? 'Processing...' : 'Complete Sale'}
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Receipt Modal */}
       {receiptHtml && (
@@ -582,4 +203,8 @@ export default function NewSalePage() {
       )}
     </div>
   );
+}
+
+function formatTotal(amount: number) {
+  return `K${amount.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }

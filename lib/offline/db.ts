@@ -4,11 +4,15 @@ export interface OfflineSale {
   id: string;
   synced: number;
   created_at: string;
+  // New multi-item format
   data: {
-    product_id: string;
+    items?: Array<{ product_id: string; quantity: number }>;
+    // Legacy single-item format (for old queued sales)
+    product_id?: string;
     client_id: string;
     payment_method: 'cash' | 'pay-slow';
     installment_duration?: number;
+    installments?: Array<{ amount_due: number; due_date: string }>;
   };
 }
 
