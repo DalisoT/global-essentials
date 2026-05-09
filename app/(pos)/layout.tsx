@@ -50,25 +50,38 @@ function NavItem({
   label,
   icon: Icon,
   compact = false,
+  iconOnly = false,
 }: {
   href: string;
   label: string;
   icon: typeof LayoutDashboard;
   compact?: boolean;
+  iconOnly?: boolean;
 }) {
   return (
     <Link
       href={href}
       className={cn(
-        'flex items-center gap-3 rounded-xl transition-all duration-200 hover:text-tactical-blue active:scale-95',
-        compact ? 'px-3 py-2.5' : 'px-4 py-3',
+        'flex items-center gap-1 rounded-xl transition-all duration-200 hover:text-tactical-blue active:scale-95',
+        iconOnly
+          ? 'flex-1 flex-col items-center justify-center py-3 px-1 min-w-0'
+          : compact
+            ? 'px-3 py-2.5'
+            : 'px-4 py-3',
         'text-white/60'
       )}
     >
-      <Icon className="w-5 h-5 shrink-0" />
-      <span className={cn('font-semibold uppercase tracking-wide', compact ? 'text-xs' : 'text-sm')}>
-        {label}
-      </span>
+      <Icon className={cn('shrink-0', iconOnly ? 'w-5 h-5' : 'w-5 h-5')} />
+      {!iconOnly && (
+        <span className={cn('font-semibold uppercase tracking-wide', compact ? 'text-[10px]' : 'text-xs')}>
+          {label}
+        </span>
+      )}
+      {iconOnly && (
+        <span className="text-[9px] font-semibold uppercase tracking-wide truncate w-full text-center mt-0.5">
+          {label}
+        </span>
+      )}
     </Link>
   );
 }
@@ -137,11 +150,11 @@ export default function POSLayout({ children }: { children: React.ReactNode }) {
 
       <main className="px-4 py-4 max-w-lg mx-auto">{children}</main>
 
-      {/* Bottom Nav - primary items only */}
+      {/* Bottom Nav - 5 primary items, icon-only, evenly spaced */}
       <nav className="fixed bottom-0 left-0 right-0 glassmorphism">
-        <div className="flex items-center justify-around px-2 py-3 max-w-lg mx-auto">
+        <div className="flex items-center max-w-lg mx-auto">
           {primaryNav.map((item) => (
-            <NavItem key={item.href} {...item} compact />
+            <NavItem key={item.href} {...item} compact iconOnly />
           ))}
         </div>
       </nav>
