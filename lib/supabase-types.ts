@@ -6,6 +6,7 @@ export interface Product {
   stock_level: number;
   image_url: string | null;
   image_urls: string[] | null;
+  category_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -87,6 +88,66 @@ export interface ExchangeRateCustom {
   currency_pair: string;
   rate: number;
   updated_at: string;
+}
+
+// ─────────────────────────────────────────────
+// ONLINE STORE TYPES
+// ─────────────────────────────────────────────
+export interface Category {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Order {
+  id: string;
+  order_number: string;
+  customer_name: string;
+  customer_phone: string;
+  customer_email: string | null;
+  subtotal: number;
+  shipping_cost: number;
+  total: number;
+  shipping_method: string | null;
+  shipping_tracking: string | null;
+  status: 'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  shipping_address_line: string | null;
+  shipping_city: string | null;
+  shipping_province: string | null;
+  shipping_postal_code: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrderItem {
+  id: string;
+  order_id: string;
+  product_id: string;
+  product_name: string;
+  product_sku: string | null;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  created_at: string;
+}
+
+export interface OrderWithItems extends Order {
+  items: OrderItem[];
+}
+
+export interface CartItem {
+  productId: string;
+  name: string;
+  price: number;
+  quantity: number;
+  image?: string;
+  maxStock: number;
 }
 
 export interface Database {

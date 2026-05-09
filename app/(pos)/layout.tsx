@@ -28,6 +28,7 @@ const navItems = [
   { href: '/new-sale', label: 'New Sale', icon: ShoppingCart },
   { href: '/ledger', label: 'Ledger', icon: BookOpen },
   { href: '/debts', label: 'Debts', icon: AlertCircle },
+  { href: '/orders', label: 'Orders', icon: Package },
   { href: '/inventory', label: 'Inventory', icon: Package },
   { href: '/expenses', label: 'Expenses', icon: Wallet },
   { href: '/analytics', label: 'Analytics', icon: TrendingUp },

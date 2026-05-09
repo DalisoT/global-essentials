@@ -1,0 +1,165 @@
+'use server';
+
+import { createServerSupabaseClient } from '@/lib/supabase-server';
+import type { OrderWithItems } from '@/lib/supabase-types';
+
+export async function createOrder({
+  customerName,
+  customerPhone,
+  customerEmail,
+  items,
+  shippingCost,
+  shippingMethod,
+  shippingAddress,
+  shippingCity,
+  shippingProvince,
+  shippingPostalCode,
+  notes,
+}: {
+  customerName: string;
+  customerPhone: string;
+  customerEmail?: string;
+  items: Array<{ productId: string; name: string; price: number; quantity: number }>;
+  shippingCost: number;
+  shippingMethod: string;
+  shippingAddress: string;
+  shippingCity: string;
+  shippingProvince: string;
+  shippingPostalCode?: string;
+  notes?: string;
+}): Promise<{ data: OrderWithItems | null; error: string | null }> {
+  const supabase = await createServerSupabaseClient();
+
+  // Validate products exist and have stock
+  const productIds = items.map((i) => i.productId);
+  const { data: products } = await supabase
+    .from('products')
+    .select('id, name, stock_level')
+    .in('id', productIds);
+
+  if (!products || products.length !== items.length) {
+    return { data: null, error: 'Some products not found' };
+  }
+
+  // Check stock for each item
+  for (const item of items) {
+    const product = products.find((p) => p.id === item.productId);
+    if (!product) return { data: null, error: `Product not found: ${item.productId}` };
+    if (product.stock_level < item.quantity) {
+      return { data: null, error: `Insufficient stock for ${item.name}. Available: ${product.stock_level}` };
+    }
+  }
+
+  const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const total = subtotal + shippingCost;
+
+  // Create order
+  const { data: order, error: orderError } = await supabase
+    .from('orders')
+    .insert([
+      {
+        customer_name: customerName,
+        customer_phone: customerPhone,
+        customer_email: customerEmail || null,
+        subtotal,
+        shipping_cost: shippingCost,
+        total,
+        shipping_method: shippingMethod,
+        shipping_address_line: shippingAddress,
+        shipping_city: shippingCity,
+        shipping_province: shippingProvince,
+        shipping_postal_code: shippingPostalCode || null,
+        notes: notes || null,
+        status: 'pending',
+      },
+    ])
+    .select()
+    .single();
+
+  if (orderError || !order) {
+    return { data: null, error: orderError?.message || 'Failed to create order' };
+  }
+
+  // Create order items
+  const orderItems = items.map((item) => ({
+    order_id: order.id,
+    product_id: item.productId,
+    product_name: item.name,
+    quantity: item.quantity,
+    unit_price: item.price,
+    total_price: item.price * item.quantity,
+  }));
+
+  const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
+
+  if (itemsError) {
+    // Rollback: delete the order
+    await supabase.from('orders').delete().eq('id', order.id);
+    return { data: null, error: 'Failed to create order items' };
+  }
+
+  // Decrement stock for each product
+  for (const item of items) {
+    const product = products.find((p) => p.id === item.productId);
+    if (product) {
+      await supabase
+        .from('products')
+        .update({ stock_level: product.stock_level - item.quantity })
+        .eq('id', item.productId);
+    }
+  }
+
+  return { data: { ...order, items: orderItems }, error: null };
+}
+
+export async function getOrderById(orderId: string): Promise<{ data: OrderWithItems | null; error: string | null }> {
+  const supabase = await createServerSupabaseClient();
+
+  const { data: order, error } = await supabase.from('orders').select('*').eq('id', orderId).single();
+
+  if (error || !order) {
+    return { data: null, error: 'Order not found' };
+  }
+
+  const { data: items } = await supabase.from('order_items').select('*').eq('order_id', orderId);
+
+  return { data: { ...order, items: items || [] }, error: null };
+}
+
+export async function getOrders(status?: string): Promise<{ data: OrderWithItems[]; error: string | null }> {
+  const supabase = await createServerSupabaseClient();
+
+  let query = supabase.from('orders').select('*').order('created_at', { ascending: false });
+
+  if (status) {
+    query = query.eq('status', status);
+  }
+
+  const { data, error } = await query;
+
+  if (error) return { data: [], error: error?.message || null };
+
+  // Fetch items for each order
+  const ordersWithItems: OrderWithItems[] = await Promise.all(
+    (data || []).map(async (order) => {
+      const { data: items } = await supabase.from('order_items').select('*').eq('order_id', order.id);
+      return { ...order, items: items || [] };
+    })
+  );
+
+  return { data: ordersWithItems, error: null };
+}
+
+export async function updateOrderStatus(
+  orderId: string,
+  status: OrderWithItems['status']
+): Promise<{ error: string | null }> {
+  const supabase = await createServerSupabaseClient();
+
+  const { error } = await supabase
+    .from('orders')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', orderId);
+
+  return { error: error?.message || null };
+}
