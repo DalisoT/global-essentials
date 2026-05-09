@@ -53,11 +53,29 @@ export async function createOrder({
   const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
   const total = subtotal + shippingCost;
 
+  // Generate order number (GE-YYYY-NNNNN)
+  const year = new Date().getFullYear();
+  const { data: lastOrder } = await supabase
+    .from('orders')
+    .select('order_number')
+    .like('order_number', `GE-${year}-%`)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  let seqNum = 1;
+  if (lastOrder?.order_number) {
+    const lastSeq = parseInt(lastOrder.order_number.split('-').pop() || '0', 10);
+    seqNum = lastSeq + 1;
+  }
+  const orderNumber = `GE-${year}-${String(seqNum).padStart(5, '0')}`;
+
   // Create order
   const { data: order, error: orderError } = await supabase
     .from('orders')
     .insert([
       {
+        order_number: orderNumber,
         customer_name: customerName,
         customer_phone: customerPhone,
         customer_email: customerEmail || null,

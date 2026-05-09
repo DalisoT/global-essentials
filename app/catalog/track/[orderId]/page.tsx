@@ -101,7 +101,7 @@ export default async function TrackOrderPage({ params }: TrackOrderPageProps) {
 
         <div className="space-y-3">
           <Link
-            href="/catalog/track/search"
+            href="/catalog/track"
             className="block w-full py-4 rounded-2xl border border-white/20 text-white/70 font-bold text-center hover:bg-white/5 transition-all"
           >
             Track Another Order
