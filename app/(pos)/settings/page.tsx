@@ -200,7 +200,13 @@ export default function SettingsPage() {
                       <div key={rate.id} className="flex items-center gap-3 bg-white/5 rounded-xl p-3 min-w-0">
                         <div className="flex-1 min-w-0">
                           <span className="text-sm text-white/60 truncate block">
-                            {rate.tier_max_kg ? `${rate.tier_min_kg}kg - ${rate.tier_max_kg}kg` : `${rate.tier_min_kg}kg+`}
+                            {rate.rate_type === 'per_cbm'
+                              ? (rate.volume_max_cbm
+                                  ? `${rate.volume_min_cbm}CBM - ${rate.volume_max_cbm}CBM`
+                                  : `${rate.volume_min_cbm}CBM+`)
+                              : (rate.tier_max_kg
+                                  ? `${rate.tier_min_kg}kg - ${rate.tier_max_kg}kg`
+                                  : `${rate.tier_min_kg}kg+`)}
                           </span>
                           <span className="text-xs text-white/30 ml-2">
                             ({rate.rate_type === 'per_kg' ? 'per kg' : rate.rate_type === 'per_cbm' ? 'per CBM' : 'per ton'})

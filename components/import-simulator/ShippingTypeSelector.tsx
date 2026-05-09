@@ -62,7 +62,7 @@ export function ShippingTypeSelector({ selected, onChange, manualRate, onManualR
           />
         </div>
         <p className="text-xs text-white/30 break-all">
-          TODAY CARGO: Air 7D $13.90 | Air 14D $15.90 | Sea Small $3.90 | Sea CBM $339/CBM | Sea Heavy $449/t
+          TODAY CARGO: Air 7D from $11.90/kg | Air 14D from $13.90/kg | Sea Small $3.90/kg | Sea CBM from $359/CBM | Sea Heavy $469/ton
         </p>
       </div>
 
