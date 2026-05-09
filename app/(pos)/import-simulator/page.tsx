@@ -4,18 +4,25 @@ import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { cn, formatCurrency } from '@/lib/utils';
-import { Plane, Save, ArrowRight, RefreshCw } from 'lucide-react';
+import { Plane, Save, ArrowRight, RefreshCw, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
 import { ShippingTypeSelector } from '@/components/import-simulator/ShippingTypeSelector';
 import { ExchangeRateInput } from '@/components/import-simulator/ExchangeRateInput';
 import { CostBreakdown } from '@/components/import-simulator/CostBreakdown';
 import { ProfitIndicator } from '@/components/import-simulator/ProfitIndicator';
 import { AddToInventoryButton } from '@/components/import-simulator/AddToInventoryButton';
+import { ShippingRecommender } from '@/components/import-simulator/ShippingRecommender';
+import { ProfitabilityAdvisor } from '@/components/import-simulator/ProfitabilityAdvisor';
+import { CashFlowImpact } from '@/components/import-simulator/CashFlowImpact';
+import { BreakEvenCalculator } from '@/components/import-simulator/BreakEvenCalculator';
+import { DemandIndicator } from '@/components/import-simulator/DemandIndicator';
 import { calculateLandedCost, type CalculationResult } from '@/lib/import/calculator';
 import { SHIPPING_TYPES, type ShippingTypeId } from '@/lib/import/shipping-types';
 import { getShippingRates, getCustomExchangeRate, saveCustomExchangeRate } from '@/lib/actions/import-simulator';
+import { getImportAdvisor } from '@/lib/actions/import-advisor';
 import { fetchLiveUSDToZMW } from '@/lib/currency/rates';
 import { useImportSimulatorStore } from '@/stores/import-simulator-store';
 import type { ShippingRate } from '@/lib/supabase-types';
+import type { ImportAdvisorOutput } from '@/lib/import/advisor-types';
 
 function ImportSimulatorContent() {
   const router = useRouter();
@@ -42,28 +49,25 @@ function ImportSimulatorContent() {
   const [isRefreshingRate, setIsRefreshingRate] = useState(false);
   const [rateSource, setRateSource] = useState<'api' | 'cache' | 'fallback' | 'manual'>('manual');
   const [showProfit, setShowProfit] = useState(false);
+  const [showAdvisor, setShowAdvisor] = useState(true);
+  const [advisorOutput, setAdvisorOutput] = useState<ImportAdvisorOutput | null>(null);
+  const [isLoadingAdvisor, setIsLoadingAdvisor] = useState(false);
 
   // Load rates and exchange rate on mount
   useEffect(() => {
     async function loadData() {
       console.log('[ImportSimulator] loadData started');
-      // Load shipping rates from database
       const { data: rates, error } = await getShippingRates();
       console.log('[ImportSimulator] Shipping rates result:', { count: rates?.length, error });
       if (error || !rates || rates.length === 0) {
-        // Don't show error toast — rates might just not be configured yet
-        // User can use manual rate override
         setShippingRates([]);
       } else {
         setShippingRates(rates);
       }
 
-      // Fetch live exchange rate from API
       setIsRefreshingRate(true);
-      console.log('[ImportSimulator] Fetching live exchange rate...');
       try {
         const { rate, source } = await fetchLiveUSDToZMW();
-        console.log('[ImportSimulator] Got rate:', rate, 'source:', source);
         setExchangeRate(rate);
         setRateSource(source);
         setDefaultExchangeRate(rate);
@@ -104,11 +108,51 @@ function ImportSimulatorContent() {
       setShowProfit(true);
     }
 
-    // Clear params after reading
     if (name || costPrice || sellingPrice) {
       window.history.replaceState({}, '', '/import-simulator');
     }
   }, [searchParams, setCalculationMode]);
+
+  // Call advisor when inputs change
+  useEffect(() => {
+    if (!hasRequiredFields) {
+      setAdvisorOutput(null);
+      return;
+    }
+    if (!sellingPriceInput && !markupPercentInput) {
+      setAdvisorOutput(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingAdvisor(true);
+
+    getImportAdvisor({
+      productName,
+      unitCostUSD: parseFloat(unitCostUSD),
+      quantity: parseInt(quantity),
+      weightPerUnitKg: parseFloat(weightPerUnit),
+      volumePerUnitCBM: volumePerUnit ? parseFloat(volumePerUnit) : null,
+      exchangeRate,
+      sellingPriceLocal: calculationMode === 'selling_price' && sellingPriceInput ? parseFloat(sellingPriceInput) : undefined,
+      markupPercent: calculationMode === 'markup' && markupPercentInput ? parseFloat(markupPercentInput) : undefined,
+    }, shippingRates)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.error('[ImportSimulator] Advisor error:', error);
+        }
+        setAdvisorOutput(data || null);
+        setIsLoadingAdvisor(false);
+      })
+      .catch(err => {
+        if (cancelled) return;
+        console.error('[ImportSimulator] Advisor exception:', err);
+        setIsLoadingAdvisor(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [productName, unitCostUSD, quantity, weightPerUnit, volumePerUnit, exchangeRate, sellingPriceInput, markupPercentInput, calculationMode, shippingRates]);
 
   // Calculate result
   const result = useMemo<CalculationResult | null>(() => {
@@ -143,7 +187,21 @@ function ImportSimulatorContent() {
     }
   };
 
+  const handleApplySuggestedPrice = (price: number) => {
+    setSellingPriceInput(price.toFixed(2));
+    setCalculationMode('selling_price');
+    setShowProfit(true);
+    toast.success('Selling price applied');
+  };
+
+  const handleSelectShipping = (methodId: ShippingTypeId) => {
+    setShippingType(methodId);
+    toast.info(`Switched to ${SHIPPING_TYPES.find(st => st.id === methodId)?.name || methodId}`);
+  };
+
   const hasRequiredFields = unitCostUSD && parseFloat(unitCostUSD) > 0 && quantity && parseInt(quantity) > 0 && weightPerUnit && parseFloat(weightPerUnit) > 0;
+  const hasPricing = (calculationMode === 'selling_price' && sellingPriceInput && parseFloat(sellingPriceInput) > 0) ||
+    (calculationMode === 'markup' && markupPercentInput && parseFloat(markupPercentInput) > 0);
 
   return (
     <div className="space-y-6 pb-32">
@@ -236,6 +294,76 @@ function ImportSimulatorContent() {
           </div>
         </div>
       </div>
+
+      {/* Advisor Panel */}
+      {hasRequiredFields && hasPricing && (
+        <div className="card-tactical space-y-4">
+          {/* Advisor Header */}
+          <button
+            onClick={() => setShowAdvisor(!showAdvisor)}
+            className="w-full flex items-center justify-between"
+          >
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-tactical-neon" />
+              <h3 className="text-sm font-bold uppercase tracking-wider text-tactical-neon">
+                Smart Advisor
+              </h3>
+              {isLoadingAdvisor && (
+                <RefreshCw className="w-3 h-3 text-tactical-neon animate-spin" />
+              )}
+            </div>
+            {showAdvisor ? (
+              <ChevronUp className="w-4 h-4 text-white/40" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-white/40" />
+            )}
+          </button>
+
+          {showAdvisor && advisorOutput && (
+            <div className="space-y-4">
+              {/* Shipping Recommender — always show if we have data */}
+              {advisorOutput.shippingRecommendation && (
+                <ShippingRecommender
+                  recommendation={advisorOutput.shippingRecommendation}
+                  onSelectMethod={handleSelectShipping}
+                />
+              )}
+
+              {/* Profitability Advisor */}
+              {advisorOutput.profitabilityAdvice && (
+                <ProfitabilityAdvisor
+                  advice={advisorOutput.profitabilityAdvice}
+                  onApplyPrice={handleApplySuggestedPrice}
+                />
+              )}
+
+              {/* Break-Even Calculator */}
+              {advisorOutput.breakEven && (
+                <BreakEvenCalculator result={advisorOutput.breakEven} />
+              )}
+
+              {/* Cash Flow Impact */}
+              {advisorOutput.cashFlowImpact && (
+                <CashFlowImpact impact={advisorOutput.cashFlowImpact} />
+              )}
+
+              {/* Demand Indicator */}
+              {advisorOutput.demandAdjustment && (
+                <DemandIndicator
+                  adjustment={advisorOutput.demandAdjustment}
+                  onSelectShipping={handleSelectShipping}
+                />
+              )}
+            </div>
+          )}
+
+          {!showAdvisor && !isLoadingAdvisor && (
+            <p className="text-xs text-white/40 text-center">
+              Tap to reveal AI-powered shipping recommendations
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Shipping Method */}
       <div className="card-tactical">
