@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import {
@@ -16,19 +17,26 @@ import {
   CloudOff,
   Plane,
   Settings,
+  Menu,
+  X,
+  MoreHorizontal,
 } from 'lucide-react';
 import { signOut } from '@/lib/actions/auth';
 import { useAuthStore } from '@/stores/auth-store';
 import { GlobalSearch } from '@/components/GlobalSearch';
 import { ServiceWorkerRegistration } from '@/components/ServiceWorkerRegistration';
 import { useSyncStatus } from '@/hooks/useSyncStatus';
+import { motion, AnimatePresence } from 'framer-motion';
 
-const navItems = [
+const primaryNav = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/new-sale', label: 'New Sale', icon: ShoppingCart },
   { href: '/ledger', label: 'Ledger', icon: BookOpen },
   { href: '/debts', label: 'Debts', icon: AlertCircle },
   { href: '/orders', label: 'Orders', icon: Package },
+];
+
+const secondaryNav = [
   { href: '/inventory', label: 'Inventory', icon: Package },
   { href: '/expenses', label: 'Expenses', icon: Wallet },
   { href: '/analytics', label: 'Analytics', icon: TrendingUp },
@@ -41,34 +49,57 @@ function NavItem({
   href,
   label,
   icon: Icon,
+  compact = false,
 }: {
   href: string;
   label: string;
   icon: typeof LayoutDashboard;
+  compact?: boolean;
 }) {
   return (
     <Link
       href={href}
       className={cn(
-        'flex flex-col items-center gap-1 px-3 py-2 rounded-xl',
-        'text-[10px] font-semibold uppercase tracking-wide',
-        'transition-all duration-200 hover:text-tactical-blue active:scale-95',
+        'flex items-center gap-3 rounded-xl transition-all duration-200 hover:text-tactical-blue active:scale-95',
+        compact ? 'px-3 py-2.5' : 'px-4 py-3',
         'text-white/60'
       )}
     >
-      <Icon className="w-5 h-5" />
-      <span>{label}</span>
+      <Icon className="w-5 h-5 shrink-0" />
+      <span className={cn('font-semibold uppercase tracking-wide', compact ? 'text-xs' : 'text-sm')}>
+        {label}
+      </span>
     </Link>
   );
 }
 
-export default function POSLayout({
-  children,
+function DrawerItem({
+  href,
+  label,
+  icon: Icon,
+  onClick,
 }: {
-  children: React.ReactNode;
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  onClick?: () => void;
 }) {
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      className="flex items-center gap-4 px-4 py-3 rounded-xl text-white/70 hover:bg-white/10 hover:text-white transition-all"
+    >
+      <Icon className="w-5 h-5 text-tactical-blue" />
+      <span className="font-semibold text-sm">{label}</span>
+    </Link>
+  );
+}
+
+export default function POSLayout({ children }: { children: React.ReactNode }) {
   const { user } = useAuthStore();
   const { pendingCount } = useSyncStatus();
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-black pb-24">
@@ -81,13 +112,11 @@ export default function POSLayout({
               <User className="w-4 h-4 text-white" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-white">
-                {user?.fullName || 'Staff'}
-              </p>
+              <p className="text-sm font-semibold text-white">{user?.fullName || 'Staff'}</p>
               <p className="text-xs text-white/40 capitalize">{user?.role || 'staff'}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             {pendingCount > 0 && (
               <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-tactical-orange/20 text-tactical-orange text-xs font-bold">
                 <CloudOff className="w-3 h-3" />
@@ -95,29 +124,82 @@ export default function POSLayout({
               </div>
             )}
             <GlobalSearch />
-            <form action={signOut}>
-              <button
-                type="submit"
-                className="p-2 rounded-lg bg-tactical-slate hover:bg-white/10 transition-colors text-white/60"
-                aria-label="Sign out"
-              >
-                <LogOut className="w-5 h-5" />
-              </button>
-            </form>
+            <button
+              onClick={() => setDrawerOpen(true)}
+              className="p-2 rounded-lg hover:bg-white/10 transition-colors text-white/60"
+              aria-label="Open menu"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
           </div>
         </div>
       </header>
 
       <main className="px-4 py-4 max-w-lg mx-auto">{children}</main>
 
-      {/* Glassmorphism Bottom Navbar - scrollable */}
+      {/* Bottom Nav - primary items only */}
       <nav className="fixed bottom-0 left-0 right-0 glassmorphism">
-        <div className="flex items-center justify-start px-2 py-3 max-w-lg mx-auto gap-1 overflow-x-auto hide-scrollbar">
-          {navItems.map((item) => (
-            <NavItem key={item.href} {...item} />
+        <div className="flex items-center justify-around px-2 py-3 max-w-lg mx-auto">
+          {primaryNav.map((item) => (
+            <NavItem key={item.href} {...item} compact />
           ))}
         </div>
       </nav>
+
+      {/* Side Drawer - secondary items */}
+      <AnimatePresence>
+        {drawerOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setDrawerOpen(false)}
+              className="fixed inset-0 bg-black/60 z-50"
+            />
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="fixed right-0 top-0 bottom-0 w-72 bg-tactical-slate z-50 flex flex-col"
+            >
+              <div className="flex items-center justify-between p-4 border-b border-white/10">
+                <div className="flex items-center gap-3">
+                  <MoreHorizontal className="w-5 h-5 text-tactical-blue" />
+                  <span className="font-bold text-white">More</span>
+                </div>
+                <button
+                  onClick={() => setDrawerOpen(false)}
+                  className="p-2 rounded-lg hover:bg-white/10 text-white/60"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-3 space-y-1">
+                {secondaryNav.map((item) => (
+                  <DrawerItem
+                    key={item.href}
+                    {...item}
+                    onClick={() => setDrawerOpen(false)}
+                  />
+                ))}
+              </div>
+              <div className="p-3 border-t border-white/10">
+                <form action={signOut}>
+                  <button
+                    type="submit"
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-white/60 hover:bg-white/10 hover:text-white transition-all"
+                  >
+                    <LogOut className="w-5 h-5 text-tactical-red" />
+                    <span className="font-semibold text-sm">Sign Out</span>
+                  </button>
+                </form>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
