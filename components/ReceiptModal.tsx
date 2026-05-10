@@ -31,12 +31,19 @@ export function ReceiptModal({ html, onClose }: ReceiptModalProps) {
   const handlePrint = useReactToPrint({
     documentTitle: 'Receipt',
     contentRef: contentRef,
+    pageStyle: '@page { size: auto; margin: 0; }',
   });
 
   const handleDownloadPDF = async () => {
     if (!contentRef.current) return;
     try {
-      const canvas = await html2canvas(contentRef.current, { scale: 2, useCORS: true });
+      const canvas = await html2canvas(contentRef.current, {
+        scale: 2,
+        useCORS: true,
+        scrollY: 0,
+        windowHeight: contentRef.current?.scrollHeight,
+        height: contentRef.current?.scrollHeight,
+      });
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const width = pdf.internal.pageSize.getWidth();
@@ -63,7 +70,13 @@ export function ReceiptModal({ html, onClose }: ReceiptModalProps) {
   const handleShare = async () => {
     if (!contentRef.current) return;
     try {
-      const canvas = await html2canvas(contentRef.current, { scale: 2, useCORS: true });
+      const canvas = await html2canvas(contentRef.current, {
+        scale: 2,
+        useCORS: true,
+        scrollY: 0,
+        windowHeight: contentRef.current?.scrollHeight,
+        height: contentRef.current?.scrollHeight,
+      });
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
       if (!blob) throw new Error('Failed to create image');
       const file = new File([blob], 'receipt.png', { type: 'image/png' });
@@ -104,10 +117,11 @@ export function ReceiptModal({ html, onClose }: ReceiptModalProps) {
           </button>
         </div>
 
-        {/* Preview */}
+        {/* Preview — no height clip so html2canvas/react-to-print capture full receipt */}
         <div
           ref={contentRef}
-          className="p-4 max-h-96 overflow-y-auto [&_*]:text-black [&_*]:bg-white"
+          className="p-4 [&_*]:text-black [&_*]:bg-white min-h-[200px]"
+          style={{ height: 'auto', minHeight: '200px' }}
           dangerouslySetInnerHTML={{ __html: sanitizedHTML }}
         />
 
