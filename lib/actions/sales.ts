@@ -269,3 +269,28 @@ export async function editSale(
   if (error) return { error: error.message };
   return {};
 }
+
+export async function markSaleFullyPaid(saleId: string): Promise<{ error?: string | null }> {
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const supabase = auth.supabase;
+
+  // Mark all unpaid installments as paid
+  const { error: installError } = await supabase
+    .from('installments')
+    .update({ is_paid: true, paid_at: new Date().toISOString() })
+    .eq('sale_id', saleId)
+    .eq('is_paid', false);
+
+  if (installError) return { error: installError.message };
+
+  // Update the sale to paid
+  const { error: saleError } = await supabase
+    .from('sales')
+    .update({ payment_status: 'paid' })
+    .eq('id', saleId);
+
+  if (saleError) return { error: saleError.message };
+
+  return { error: null };
+}
