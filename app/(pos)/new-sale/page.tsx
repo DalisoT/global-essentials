@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { motion, AnimatePresence } from 'framer-motion';
 import { createSale } from '@/lib/actions/sales';
 import { getSaleReceipt } from '@/lib/actions/receipts';
 import { queueSale } from '@/lib/offline/sync';
@@ -35,6 +36,7 @@ export default function NewSalePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [receiptHtml, setReceiptHtml] = useState<string | null>(null);
   const [lastSaleId, setLastSaleId] = useState<string | null>(null);
+  const [cartOpen, setCartOpen] = useState(false);
 
   const total = items.reduce(
     (sum, item) => sum + item.product.selling_price * item.quantity,
@@ -154,42 +156,74 @@ export default function NewSalePage() {
         </button>
       </header>
 
-      {/* Main: Product Grid */}
+      {/* Product Grid */}
       <div className="flex-1 overflow-y-auto px-4 py-4">
         <ProductGrid onAddProduct={handleAddProduct} addedProductIds={addedProductIds} />
       </div>
 
-      {/* Fixed Bottom Cart Sidebar */}
-      <div className="fixed inset-x-0 bottom-0 top-0 z-50 flex">
-        {/* Backdrop */}
-        <div
-          className="flex-1 bg-black/60"
-          onClick={() => router.back()}
-        />
+      {/* Bottom Cart Bar */}
+      {items.length > 0 && (
+        <button
+          onClick={() => setCartOpen(true)}
+          className="sticky bottom-20 mx-4 mb-4 p-4 rounded-2xl bg-tactical-neon flex items-center justify-between z-30 active:scale-[0.98] transition-transform"
+        >
+          <div className="text-left">
+            <p className="text-xs text-black/60 font-semibold uppercase">View Cart</p>
+            <p className="text-sm font-black text-black">{items.length} item{items.length !== 1 ? 's' : ''} · {formatTotal(total)}</p>
+          </div>
+          <span className="text-black font-black text-lg">→</span>
+        </button>
+      )}
 
-        {/* Cart Sidebar — slides from right */}
-        <div className="w-full max-w-sm bg-tactical-slate flex flex-col">
-          <POSCart
-            items={items}
-            onRemoveItem={handleRemoveItem}
-            onUpdateQuantity={handleUpdateQuantity}
-            selectedClient={selectedClient}
-            onSelectClient={setSelectedClient}
-            paymentMethod={paymentMethod}
-            onPaymentMethodChange={setPaymentMethod}
-            installmentDuration={installmentDuration}
-            onInstallmentDurationChange={setInstallmentDuration}
-            showCustomPlan={showCustomPlan}
-            onShowCustomPlanChange={setShowCustomPlan}
-            customInstallments={customInstallments}
-            onCustomInstallmentsChange={setCustomInstallments}
-            onAddCustomInstallment={handleAddCustomInstallment}
-            onRemoveCustomInstallment={handleRemoveCustomInstallment}
-            onCompleteSale={handleCompleteSale}
-            isSubmitting={isSubmitting}
-          />
-        </div>
-      </div>
+      {/* Cart Sidebar Slide-in */}
+      <AnimatePresence>
+        {cartOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setCartOpen(false)}
+              className="fixed inset-0 bg-black/60 z-50"
+            />
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="fixed right-0 top-0 bottom-0 w-full max-w-sm bg-tactical-slate z-50 flex flex-col"
+            >
+              <div className="flex items-center justify-between p-4 border-b border-white/10">
+                <p className="font-bold text-white">Cart</p>
+                <button onClick={() => setCartOpen(false)} className="p-2 rounded-lg hover:bg-white/10 text-white/60">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                <POSCart
+                  items={items}
+                  onRemoveItem={handleRemoveItem}
+                  onUpdateQuantity={handleUpdateQuantity}
+                  selectedClient={selectedClient}
+                  onSelectClient={setSelectedClient}
+                  paymentMethod={paymentMethod}
+                  onPaymentMethodChange={setPaymentMethod}
+                  installmentDuration={installmentDuration}
+                  onInstallmentDurationChange={setInstallmentDuration}
+                  showCustomPlan={showCustomPlan}
+                  onShowCustomPlanChange={setShowCustomPlan}
+                  customInstallments={customInstallments}
+                  onCustomInstallmentsChange={setCustomInstallments}
+                  onAddCustomInstallment={handleAddCustomInstallment}
+                  onRemoveCustomInstallment={handleRemoveCustomInstallment}
+                  onCompleteSale={handleCompleteSale}
+                  isSubmitting={isSubmitting}
+                />
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Receipt Modal */}
       {receiptHtml && (
