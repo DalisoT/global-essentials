@@ -132,19 +132,57 @@ export async function recordInstallmentPayment({
   if (isFullPayment) {
     // Full payment — mark as fully paid
     updatePayload.is_paid = true;
-    updatePayload.amount_paid = installment.amount_due;
+    // Only include amount_paid if the column exists (migration may not have run)
+    if (installment.amount_paid !== undefined) {
+      updatePayload.amount_paid = installment.amount_due;
+    }
   } else {
     // Partial payment — track what was paid, keep as unpaid
     updatePayload.is_paid = false;
-    updatePayload.amount_paid = (installment.amount_paid || 0) + amountPaid;
+    if (installment.amount_paid !== undefined) {
+      updatePayload.amount_paid = (installment.amount_paid || 0) + amountPaid;
+    }
   }
 
   const { error: updateError } = await supabase
     .from('installments')
-    .update(updatePayload)
+    .update({
+      is_paid: isFullPayment,
+      paid_at: paidAt ? new Date(paidAt).toISOString() : new Date().toISOString(),
+    })
     .eq('id', installmentId);
 
   if (updateError) return { error: updateError.message };
+
+  // Try to update amount_paid if column exists (migration may not have run)
+  if (installment.amount_paid !== undefined && !isFullPayment) {
+    await supabase
+      .from('installments')
+      .update({ amount_paid: (installment.amount_paid || 0) + amountPaid })
+      .eq('id', installmentId)
+      .then(({ error }) => {
+        if (error) console.warn('amount_paid column not available:', error.message);
+      });
+  } else if (installment.amount_paid !== undefined && isFullPayment) {
+    await supabase
+      .from('installments')
+      .update({ amount_paid: installment.amount_due })
+      .eq('id', installmentId)
+      .then(({ error }) => {
+        if (error) console.warn('amount_paid column not available:', error.message);
+      });
+  }
+
+  // Try to update note if provided
+  if (note) {
+    await supabase
+      .from('installments')
+      .update({ note })
+      .eq('id', installmentId)
+      .then(({ error }) => {
+        if (error) console.warn('note column not available:', error.message);
+      });
+  }
 
   // Check if all installments for this sale are now fully paid
   const { data: allInstallments } = await supabase
