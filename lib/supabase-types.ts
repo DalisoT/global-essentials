@@ -34,9 +34,11 @@ export interface Installment {
   id: string;
   sale_id: string;
   amount_due: number;
+  amount_paid: number | null;
   due_date: string;
   is_paid: boolean;
   paid_at: string | null;
+  note: string | null;
   created_at: string;
   updated_at: string;
 }

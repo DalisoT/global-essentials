@@ -2,22 +2,154 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { searchDebts, markInstallmentPaid } from '@/lib/actions/ledger';
+import { searchDebts, recordInstallmentPayment } from '@/lib/actions/ledger';
 import { generatePaymentReminder } from '@/lib/actions/ai';
 import { markSaleFullyPaid } from '@/lib/actions/sales';
 import { formatCurrency, formatDateShort, isOverdue, getWhatsAppLink } from '@/lib/utils';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
-import { Search, Clock, CheckCircle, MessageCircle, AlertTriangle, Sparkles, Loader2, Bell, BellOff, ChevronDown, ChevronUp, Wallet } from 'lucide-react';
+import { Search, Clock, CheckCircle, MessageCircle, AlertTriangle, Sparkles, Loader2, Bell, BellOff, X, DollarSign } from 'lucide-react';
 import type { Installment } from '@/lib/supabase-types';
 import type { Sale, Product, Client } from '@/lib/supabase-types';
 import { Skeleton, EmptyState } from '@/components/ui/Skeleton';
 import { cn } from '@/lib/utils';
 
+interface DebtItem extends Installment {
+  sale?: Sale & { product?: Product; client?: Client };
+}
+
+interface PaymentModalProps {
+  installment: DebtItem;
+  onClose: () => void;
+  onRecorded: () => void;
+}
+
+function PaymentModal({ installment, onClose, onRecorded }: PaymentModalProps) {
+  const [amount, setAmount] = useState(installment.amount_due.toString());
+  const [paidAt, setPaidAt] = useState(new Date().toISOString().split('T')[0]);
+  const [note, setNote] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const fullAmount = installment.amount_due;
+  const parsedAmount = parseFloat(amount) || 0;
+  const isFull = parsedAmount >= fullAmount;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (parsedAmount <= 0) {
+      toast.error('Enter a valid amount');
+      return;
+    }
+    setIsSubmitting(true);
+    const { error } = await recordInstallmentPayment({
+      installmentId: installment.id,
+      amount: parsedAmount,
+      paidAt: new Date(paidAt).toISOString(),
+      note: note || undefined,
+    });
+    setIsSubmitting(false);
+    if (error) {
+      toast.error('Failed to record payment');
+    } else {
+      toast.success(isFull ? 'Payment recorded!' : 'Partial payment recorded');
+      onRecorded();
+      onClose();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+      <div className="bg-tactical-slate rounded-2xl w-full max-w-sm border border-white/10 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+          <h3 className="font-bold text-white">Record Payment</h3>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-white/10 text-white/60">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          <div className="p-3 rounded-xl bg-white/5 space-y-1">
+            <p className="text-xs text-white/40 font-semibold uppercase">Client</p>
+            <p className="font-bold text-white">{installment.sale?.client?.full_name}</p>
+            <p className="text-sm text-white/60">{installment.sale?.product?.name}</p>
+          </div>
+
+          <div className="p-3 rounded-xl bg-white/5">
+            <p className="text-xs text-white/40 font-semibold uppercase mb-1">Installment Due</p>
+            <p className="text-xl font-black text-tactical-neon">{formatCurrency(fullAmount)}</p>
+            {installment.amount_paid ? (
+              <p className="text-xs text-white/40 mt-1">
+                Already paid: {formatCurrency(installment.amount_paid)} · Remaining: {formatCurrency(fullAmount - installment.amount_paid)}
+              </p>
+            ) : null}
+          </div>
+
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-white/60 block mb-1.5">
+              Amount Received
+            </label>
+            <div className="relative">
+              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+              <input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                min="0"
+                max={fullAmount}
+                step="0.01"
+                className="w-full h-12 pl-10 pr-4 bg-white/5 border border-white/10 rounded-xl text-white text-lg font-bold placeholder:text-white/30 focus:outline-none focus:border-tactical-blue"
+                placeholder={`Full amount (${formatCurrency(fullAmount)})`}
+              />
+            </div>
+            {parsedAmount < fullAmount && parsedAmount > 0 && (
+              <p className="text-xs text-tactical-orange mt-1">Partial payment — remaining {formatCurrency(fullAmount - parsedAmount)}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-white/60 block mb-1.5">
+              Date Payment Was Made
+            </label>
+            <input
+              type="date"
+              value={paidAt}
+              onChange={(e) => setPaidAt(e.target.value)}
+              max={new Date().toISOString().split('T')[0]}
+              className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-tactical-blue"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-white/60 block mb-1.5">
+              Note (optional)
+            </label>
+            <input
+              type="text"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="e.g. Paid via bank transfer"
+              className="w-full h-10 px-4 bg-white/5 border border-white/10 rounded-xl text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-tactical-blue"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full py-4 rounded-2xl bg-tactical-neon text-black font-black text-lg disabled:opacity-50"
+          >
+            {isSubmitting ? 'Recording...' : isFull ? 'Record Full Payment' : 'Record Partial Payment'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function DebtsPage() {
-  const [debts, setDebts] = useState<(Installment & { sale?: Sale & { product?: Product; client?: Client } })[]>([]);
+  const [debts, setDebts] = useState<DebtItem[]>([]);
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [generatingReminder, setGeneratingReminder] = useState<string | null>(null);
+  const [paymentModal, setPaymentModal] = useState<DebtItem | null>(null);
+  const [expandedSales, setExpandedSales] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadDebts();
@@ -26,18 +158,21 @@ export default function DebtsPage() {
   const loadDebts = async () => {
     setIsLoading(true);
     const { data } = await searchDebts(search);
-    setDebts(data || []);
+    setDebts((data || []) as DebtItem[]);
     setIsLoading(false);
   };
 
-  const handleMarkPaid = async (installmentId: string) => {
-    const { error } = await markInstallmentPaid(installmentId);
-    if (error) {
-      toast.error('Failed to mark as paid');
-    } else {
-      toast.success('Payment recorded!');
-      loadDebts();
-    }
+  const handleRecordPayment = (debt: DebtItem) => {
+    setPaymentModal(debt);
+  };
+
+  const toggleSaleExpanded = (saleId: string) => {
+    setExpandedSales((prev) => {
+      const next = new Set(prev);
+      if (next.has(saleId)) next.delete(saleId);
+      else next.add(saleId);
+      return next;
+    });
   };
 
   const handleAiReminder = async (debt: any) => {
@@ -258,10 +393,11 @@ export default function DebtsPage() {
                         <MessageCircle className="w-5 h-5" />
                       </button>
                       <button
-                        onClick={() => handleMarkPaid(debt.id)}
+                        onClick={() => handleRecordPayment(debt)}
                         className="p-3 rounded-xl bg-tactical-neon/10 hover:bg-tactical-neon/20 text-tactical-neon transition-colors"
+                        title="Record Payment"
                       >
-                        <CheckCircle className="w-5 h-5" />
+                        <DollarSign className="w-5 h-5" />
                       </button>
                     </div>
                   </div>
@@ -271,6 +407,14 @@ export default function DebtsPage() {
           </div>
         )}
       </div>
+
+      {paymentModal && (
+        <PaymentModal
+          installment={paymentModal}
+          onClose={() => setPaymentModal(null)}
+          onRecorded={loadDebts}
+        />
+      )}
     </div>
   );
 }
