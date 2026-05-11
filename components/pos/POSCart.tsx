@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { createClient, getClients } from '@/lib/actions/sales';
 import { formatCurrency } from '@/lib/utils';
@@ -12,6 +12,7 @@ import {
   Clock,
   ChevronRight,
   Check,
+  Smartphone,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Client, Product } from '@/lib/supabase-types';
@@ -96,6 +97,35 @@ export function POSCart({
     const { data } = await getClients();
     if (data) setClients(data as Client[]);
     setShowClientSearch(true);
+  };
+
+  const importFromContacts = async () => {
+    if (!navigator.contacts) {
+      toast.error('Contacts not supported on this device');
+      return;
+    }
+    try {
+      const permission = await navigator.permissions.query({ name: 'contacts' as PermissionName });
+      if (permission.state === 'denied') {
+        toast.error('Contacts permission denied. Enable in browser settings.');
+        return;
+      }
+      const contacts = await navigator.contacts.select(['name', 'tel'], { multiple: false });
+      if (!contacts || contacts.length === 0) return;
+      const contact = contacts[0];
+      const phone = contact.tel?.[0]?.value || '';
+      const name = contact.name?.[0] || '';
+      if (!phone) {
+        toast.error('No phone number found');
+        return;
+      }
+      setNewClientName(name);
+      setNewClientPhone(phone);
+      setShowNewClient(true);
+      setShowClientSearch(false);
+    } catch {
+      toast.error('Failed to import contact');
+    }
   };
 
   const handleAddClient = async () => {
@@ -278,13 +308,22 @@ export function POSCart({
                 </div>
               </div>
             ) : (
-              <button
-                onClick={() => setShowNewClient(true)}
-                className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg border border-dashed border-white/20 text-white/40 text-xs hover:border-white/40 hover:text-white/60 transition-all"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                New Client
-              </button>
+              <>
+                <button
+                  onClick={importFromContacts}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg border border-dashed border-white/20 text-white/40 text-xs hover:border-white/40 hover:text-white/60 transition-all"
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                  From Phonebook
+                </button>
+                <button
+                  onClick={() => setShowNewClient(true)}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg border border-dashed border-white/20 text-white/40 text-xs hover:border-white/40 hover:text-white/60 transition-all"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  New Client
+                </button>
+              </>
             )}
             <button
               onClick={() => {
