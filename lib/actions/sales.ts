@@ -70,6 +70,44 @@ export async function createSale({
   const paymentStatus = payment_method === 'cash' ? 'paid' : 'pending';
   const createdSales: Array<{ id: string; total_amount: number }> = [];
 
+  interface AtomicSaleResult {
+    error?: string;
+    sales?: Array<{ id: string; total_amount: number }>;
+  }
+
+  // Try Supabase RPC for atomic transaction first
+  const { data: rpcResult, error: rpcError } = await supabase.rpc('atomic_create_sale', {
+    items_json: JSON.stringify(items),
+    client_id,
+    payment_method,
+    installment_duration: installment_duration ?? null,
+    installments_json: installments ? JSON.stringify(installments) : null,
+  }).single() as { data: AtomicSaleResult | null; error: unknown };
+
+  if (rpcError) {
+    // RPC not available or failed — fall back to optimistic-lock approach
+    // Stock was already decremented above — proceed with direct sales creation
+  }
+
+  if (rpcResult && rpcResult.error) {
+    // RPC returned an error — rollback stock that was decremented above
+    for (const item of items) {
+      const product = products.find((p) => p.id === item.product_id)!;
+      await supabase
+        .from('products')
+        .update({ stock_level: product.stock_level })
+        .eq('id', item.product_id);
+    }
+    return { error: rpcResult.error };
+  }
+
+  if (rpcResult && rpcResult.sales) {
+    return { data: rpcResult.sales, error: null };
+  }
+
+  // RPC not available — proceed with optimistic-lock approach below
+  // (stock already decremented — this is the fallback for when atomic_create_sale RPC doesn't exist)
+
   // Validate custom installments before creating any sales
   if (installments && installments.length > 0) {
     if (installments.length < 2) {
@@ -224,6 +262,16 @@ export async function createClient(fullName: string, phoneNumber: string) {
     }])
     .select()
     .single();
+
+  // If unique constraint violation (409), fetch existing client
+  if (error && (error as { code?: string }).code === '23505') {
+    const { data: existing } = await supabase
+      .from('clients')
+      .select('*')
+      .eq('phone_number', phoneNumber)
+      .single();
+    if (existing) return { data: existing, error: null };
+  }
 
   return { data, error };
 }

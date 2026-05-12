@@ -79,7 +79,7 @@ export async function getMultiItemReceipt(saleIds: string[]): Promise<{ data?: s
     clientPhone: client.phone_number,
     paymentMethod: firstSale.payment_method,
     totalAmount,
-    items: sales.map((s) => ({
+    items: sales.map((s: typeof sales[number]) => ({
       name: (s.product as unknown as { name: string }).name,
       quantity: 1,
       price: s.total_amount,

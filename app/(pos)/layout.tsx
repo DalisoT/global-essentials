@@ -111,7 +111,7 @@ function DrawerItem({
 
 export default function POSLayout({ children }: { children: React.ReactNode }) {
   const { user } = useAuthStore();
-  const { pendingCount } = useSyncStatus();
+  const { pendingCount, isSyncing, syncError } = useSyncStatus();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
@@ -131,9 +131,19 @@ export default function POSLayout({ children }: { children: React.ReactNode }) {
           </div>
           <div className="flex items-center gap-1">
             {pendingCount > 0 && (
-              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-tactical-orange/20 text-tactical-orange text-xs font-bold">
+              <div className={`
+                flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold
+                ${isSyncing ? 'bg-tactical-blue/20 text-tactical-blue animate-pulse' : 'bg-tactical-orange/20 text-tactical-orange'}
+                ${syncError ? 'bg-tactical-red/20 text-tactical-red' : ''}
+              `}>
                 <CloudOff className="w-3 h-3" />
-                {pendingCount}
+                {isSyncing ? 'Syncing...' : `${pendingCount} pending`}
+              </div>
+            )}
+            {syncError && pendingCount === 0 && (
+              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-tactical-red/20 text-tactical-red text-xs font-bold">
+                <AlertCircle className="w-3 h-3" />
+                Sync failed
               </div>
             )}
             <GlobalSearch />
