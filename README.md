@@ -1,126 +1,135 @@
-# Global Essentials - POS & Debt Management System
+# Global Essentials — POS & Debt Management System
 
-A mobile-first POS and Debt Management system built with **Next.js 14**, **Tailwind CSS**, and **Appwrite**.
+A mobile-first POS and debt management system for a physical goods business. Staff sell products (cash or pay-slow installments), track outstanding payments, manage inventory, and analyze performance. Includes a public product catalog with WhatsApp ordering.
 
 ## Features
 
-- **Dashboard** - Ground Truth (Paid - Expenses), Pipeline (Unpaid), Low Stock alerts
-- **Pay-Slow Logic** - First installment upfront, remaining (n-1) monthly
-- **Debt Collection** - Overdue highlighting, WhatsApp reminders with one-click mark paid
-- **Public Catalog** - Stunning product grid, WhatsApp ordering
-- **PWA Ready** - manifest.json configured with next-pwa
-- **Expense Tracking** - Full CRUD with category breakdown
-- **Analytics Dashboard** - Revenue charts, expense pie charts, top products, monthly trends
-- **CSV Export** - Download sales, expenses, and debts reports
+- **Dashboard** — Ground Truth (paid sales minus expenses), Pipeline (unpaid installments), low stock alerts
+- **New Sale** — Product grid → cart sidebar → client selection → payment → receipt
+- **Pay-Slow Installments** — First installment taken upfront, remaining split monthly
+  - Supports partial payments and backdated payment recording
+  - Clients can pay early or late — any amount on any date
+- **Debt Collection** — Overdue highlighting, one-click WhatsApp reminders, AI-generated messages
+- **Phonebook Import** — Add clients directly from device contacts when making a sale
+- **Inventory** — Product CRUD with image uploads
+- **Expenses** — Full CRUD with category breakdown
+- **Analytics** — Revenue charts, expense pie, top products, AI natural language queries
+- **Orders** — Order tracking with status management
+- **Public Catalog** — Product grid with WhatsApp order flow
+- **Import Simulator** — Cost calculator with AI advisor
+- **CSV Export** — Download sales, expenses, and debt reports
+- **Offline Queue** — Sales queued when offline, syncs when back online
 
 ## Tech Stack
 
-- **Frontend**: Next.js 14 (App Router), React 18, TypeScript
+- **Framework**: Next.js 14 (App Router)
 - **Styling**: Tailwind CSS with tactical dark theme
-- **Backend**: Appwrite (Database, Storage)
+- **Backend**: Supabase (PostgreSQL + Auth + Storage)
+- **AI**: Groq (llama-3.3-70b-versatile) for payment reminders and analytics queries
+- **State**: Zustand
+- **Charts**: Recharts
 - **Icons**: Lucide React
 - **Animations**: Framer Motion
-- **State**: Zustand
 - **Toasts**: Sonner
 
 ## Getting Started
 
-### 1. Setup Appwrite
+### 1. Clone & Install
 
-1. Create a project at [cloud.appwrite.io](https://cloud.appwrite.io)
-2. Create a database named `global_essentials`
-3. Create collections with these attributes:
-
-**products**
-- name: string (required)
-- cost_price: float (required)
-- selling_price: float (required)
-- stock_level: integer (required)
-- image_url: string (optional)
-
-**clients**
-- full_name: string (required)
-- phone_number: string (required)
-
-**sales**
-- product_id: string (required)
-- client_id: string (required)
-- total_amount: float (required)
-- payment_status: string (required, enum: paid/pending)
-- payment_method: string (required, enum: cash/pay-slow)
-
-**installments**
-- sale_id: string (required)
-- amount_due: float (required)
-- due_date: string (required)
-- is_paid: boolean (required)
-- paid_at: string (optional)
-
-**expenses**
-- description: string (required)
-- amount: float (required)
-- category: string (required)
-
-4. Create a storage bucket: `product-images` (public read, auth create)
-5. Enable Read/Write permissions for authenticated users
+```bash
+git clone <your-repo-url> global-essentials
+cd global-essentials
+pnpm install
+```
 
 ### 2. Configure Environment
 
 ```bash
-cd global-essentials
 cp .env.local.example .env.local
 ```
 
 Edit `.env.local`:
 ```
-NEXT_PUBLIC_APPWRITE_ENDPOINT=https://cloud.appwrite.io/v1
-NEXT_PUBLIC_APPWRITE_PROJECT_ID=your_project_id
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+GROQ_API_KEY=your-groq-api-key
 ```
 
-### 3. Install & Run
+### 3. Supabase Setup
+
+1. Create project at [supabase.com](https://supabase.com)
+2. Go to **SQL Editor** and run `supabase-schema.sql`
+3. In **Storage**, create bucket `product-images` (public read)
+4. Get credentials from **Settings → API**
+
+### 4. Run
 
 ```bash
-npm install
-npm run dev
+pnpm dev
 ```
+
+## Database Schema
+
+| Table | Key Columns |
+|---|---|
+| `products` | id, name, cost_price, selling_price, stock_level, image_url |
+| `clients` | id, full_name, phone_number |
+| `sales` | id, product_id, client_id, total_amount, payment_status, payment_method, created_at |
+| `installments` | id, sale_id, amount_due, amount_paid, due_date, is_paid, paid_at, note |
+| `expenses` | id, description, amount, category |
+
+## Pay-Slow Logic
+
+When a sale uses pay-slow:
+1. First installment = ceil(total / duration) — marked as paid immediately
+2. Remaining (n-1) installments = floor(total / duration) — unpaid
+3. Due dates are monthly from the sale date
+4. Each installment can be paid partially, on any date, with optional notes
 
 ## Project Structure
 
 ```
-global-essentials/
-├── app/
-│   ├── (pos)/                    # Protected POS routes
-│   │   ├── dashboard/            # Ground Truth Dashboard
-│   │   ├── new-sale/             # 3-step checkout flow
-│   │   ├── ledger/               # Transaction history
-│   │   ├── debts/                # Debt collection
-│   │   └── inventory/            # Product CRUD
-│   ├── catalog/                  # Public product catalog
-│   │   └── [productId]/          # Product detail
-│   └── layout.tsx                # Root layout
-├── lib/
-│   ├── appwrite.ts               # Appwrite client
-│   ├── appwrite-types.ts         # TypeScript types
-│   ├── utils.ts                  # Utility functions
-│   └── actions/                  # Server actions
-│       ├── dashboard.ts
-│       ├── sales.ts
-│       ├── ledger.ts
-│       ├── inventory.ts
-│       └── catalog.ts
-└── public/
-    └── manifest.json              # PWA manifest
+app/
+├── (pos)/                    # Staff POS (all routes under this layout)
+│   ├── dashboard/            # Ground Truth, Pipeline, Low Stock
+│   ├── new-sale/             # Product grid + cart sidebar + checkout
+│   ├── ledger/               # Sales history
+│   ├── debts/                # Installments, payment recording, WhatsApp reminders
+│   ├── inventory/            # Product CRUD
+│   ├── expenses/             # Expense CRUD
+│   ├── analytics/            # Charts + AI queries
+│   ├── orders/               # Order management
+│   ├── export/                # CSV downloads
+│   ├── import-simulator/     # Import cost calculator
+│   └── settings/              # Configuration
+├── catalog/                  # Public product catalog
+│   └── [productId]/          # Product detail + WhatsApp order
+lib/
+├── actions/                  # Server actions (async DB operations)
+│   ├── sales.ts              # createSale, getProducts, getClients, markSaleFullyPaid
+│   ├── ledger.ts             # getSalesHistory, searchDebts, recordInstallmentPayment
+│   ├── receipts.ts           # getSaleReceipt (HTML receipt generation)
+│   ├── inventory.ts          # Product CRUD + image upload
+│   ├── expenses.ts           # Expense CRUD
+│   ├── dashboard.ts          # Dashboard stats
+│   ├── analytics.ts          # Chart data
+│   └── ai.ts                  # Groq AI (reminders, risk analysis, natural queries)
+├── receipts/template.ts      # Receipt HTML template
+└── supabase-types.ts         # TypeScript types for all tables
 ```
 
 ## Design System
 
-- **Theme**: Deep Dark Mode (Black/Gray/Slate)
-- **Accents**: Electric Blue (#3b82f6), Neon Green (#22ff66), Warning Orange (#f97316)
-- **Buttons**: Large (30px+), rounded corners, heavy shadows
+- **Theme**: Deep Dark Mode (black #0a0a0a, slate #1e293b)
+- **Accents**: Electric Blue (#3b82f6), Neon Green (#22ff66), Orange (#f97316), Red (#ef4444)
+- **Buttons**: `btn-tactical` — h-14, rounded-xl, font-black
+- **Cards**: `card-tactical` — bg-tactical-slate, rounded-2xl, border-white/10
 - **Typography**: font-black, uppercase, tracking-tighter for headers
-- **Navbar**: Glassmorphism with backdrop blur
 
-## License
+## Useful Commands
 
-MIT
-# global-essentials
+```bash
+pnpm dev     # Start dev server
+pnpm build   # Production build
+pnpm lint    # ESLint check
+```
