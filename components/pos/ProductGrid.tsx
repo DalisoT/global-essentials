@@ -74,8 +74,19 @@ export function ProductGrid({ onAddProduct, addedProductIds }: ProductGridProps)
                 outOfStock && 'opacity-40 cursor-not-allowed'
               )}
             >
-              <div className="w-full aspect-square rounded-xl bg-white/5 flex items-center justify-center mb-2">
-                <Package className="w-8 h-8 text-white/30" />
+              <div className="w-full aspect-square rounded-xl bg-white/5 flex items-center justify-center mb-2 overflow-hidden">
+                {product.image_url ? (
+                  <img
+                    src={product.image_url}
+                    alt={product.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  <Package className="w-8 h-8 text-white/30" />
+                )}
               </div>
               <p className="font-bold text-sm leading-tight line-clamp-2 mb-1">
                 {product.name}
