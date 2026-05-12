@@ -1,3 +1,9 @@
+export interface ReceiptItem {
+  name: string;
+  quantity: number;
+  price: number;
+}
+
 export interface ReceiptData {
   id: string;
   date: string;
@@ -6,6 +12,7 @@ export interface ReceiptData {
   clientPhone: string;
   paymentMethod: 'cash' | 'pay-slow';
   totalAmount: number;
+  items?: ReceiptItem[];
   installments?: Array<{
     amount: number;
     dueDate: string;
@@ -138,10 +145,21 @@ export function generateReceiptHTML(receipt: ReceiptData): string {
       </div>
 
       <div class="items">
-        <div class="item">
-          <span class="item-name">${receipt.productName}</span>
-          <span class="item-price">K${receipt.totalAmount.toFixed(2)}</span>
-        </div>
+        ${
+          receipt.items && receipt.items.length > 0
+            ? receipt.items.map((item) => `
+          <div class="item">
+            <span class="item-name">${item.name}${item.quantity > 1 ? ` x${item.quantity}` : ''}</span>
+            <span class="item-price">K${item.price.toFixed(2)}</span>
+          </div>
+        `).join('')
+            : `
+          <div class="item">
+            <span class="item-name">${receipt.productName}</span>
+            <span class="item-price">K${receipt.totalAmount.toFixed(2)}</span>
+          </div>
+        `
+        }
       </div>
 
       <div class="total">

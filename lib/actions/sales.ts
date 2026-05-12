@@ -34,7 +34,7 @@ export async function createSale({
     return { error: `Installment duration must be between ${MIN_INSTALLMENT_MONTHS} and ${MAX_INSTALLMENT_MONTHS} months` };
   }
 
-  // Validate all products exist and have sufficient stock
+  // Validate all products exist and have sufficient stock FIRST
   const productIds = items.map((i) => i.product_id);
   const { data: products } = await supabase
     .from('products')
@@ -53,10 +53,24 @@ export async function createSale({
     }
   }
 
+  // Decrement stock FIRST — if this fails, nothing else happens
+  for (const item of items) {
+    const product = products.find((p) => p.id === item.product_id)!;
+    const { error: stockError } = await supabase
+      .from('products')
+      .update({ stock_level: product.stock_level - item.quantity })
+      .eq('id', item.product_id)
+      .eq('stock_level', product.stock_level); // optimistic lock — fails if stock changed
+
+    if (stockError) {
+      return { error: `Failed to reserve stock for ${product.name}. Please try again.` };
+    }
+  }
+
   const paymentStatus = payment_method === 'cash' ? 'paid' : 'pending';
   const createdSales: Array<{ id: string; total_amount: number }> = [];
 
-  // Validate custom installments
+  // Validate custom installments before creating any sales
   if (installments && installments.length > 0) {
     if (installments.length < 2) {
       return { error: 'Custom plan must have at least 2 installments' };
@@ -69,6 +83,9 @@ export async function createSale({
         return { error: 'All installment amounts must be greater than zero' };
       }
       const dueDate = new Date(inst.due_date);
+      if (isNaN(dueDate.getTime())) {
+        return { error: 'Invalid installment due date' };
+      }
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       if (dueDate < today) {
@@ -80,8 +97,8 @@ export async function createSale({
       const product = products.find((p) => p.id === item.product_id)!;
       return sum + product.selling_price * item.quantity;
     }, 0);
-    if (sum !== totalAmount) {
-      return { error: `Installments must sum to ${totalAmount}, got ${sum}` };
+    if (Math.abs(sum - totalAmount) > 0.01) {
+      return { error: `Installments must sum to ${totalAmount.toFixed(2)}, got ${sum.toFixed(2)}` };
     }
   }
 
@@ -154,11 +171,7 @@ export async function createSale({
       }
     }
 
-    // Decrement stock
-    await supabase
-      .from('products')
-      .update({ stock_level: product.stock_level - item.quantity })
-      .eq('id', item.product_id);
+    // Stock already decremented upfront with optimistic lock above
   }
 
   return { data: createdSales, error: null };

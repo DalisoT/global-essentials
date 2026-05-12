@@ -64,6 +64,16 @@ export async function markInstallmentPaid(installmentId: string) {
   const auth = await requireAuth();
   if ('error' in auth) return { data: null, error: auth.error };
   const supabase = auth.supabase;
+
+  // Fetch the installment to get its sale_id first
+  const { data: installment, error: fetchError } = await supabase
+    .from('installments')
+    .select('id, sale_id')
+    .eq('id', installmentId)
+    .single();
+
+  if (fetchError || !installment) return { error: fetchError?.message || 'Installment not found' };
+
   const { error } = await supabase
     .from('installments')
     .update({ is_paid: true, paid_at: new Date().toISOString() })
@@ -75,7 +85,7 @@ export async function markInstallmentPaid(installmentId: string) {
   const { data: installments } = await supabase
     .from('installments')
     .select('sale_id, is_paid')
-    .eq('sale_id', (await supabase.from('installments').select('sale_id').eq('id', installmentId).single())?.data?.sale_id);
+    .eq('sale_id', installment.sale_id);
 
   const allPaid = installments?.every((inst) => inst.is_paid);
 
@@ -83,7 +93,7 @@ export async function markInstallmentPaid(installmentId: string) {
     await supabase
       .from('sales')
       .update({ payment_status: 'paid' })
-      .eq('id', installments?.[0]?.sale_id);
+      .eq('id', installment.sale_id);
   }
 
   return { data: null, error: null };

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createSale } from '@/lib/actions/sales';
-import { getSaleReceipt } from '@/lib/actions/receipts';
+import { getSaleReceipt, getMultiItemReceipt } from '@/lib/actions/receipts';
 import { queueSale } from '@/lib/offline/sync';
 import { useOffline } from '@/hooks/useOffline';
 import { ReceiptModal } from '@/components/ReceiptModal';
@@ -125,10 +125,11 @@ export default function NewSalePage() {
 
     toast.success('Sale completed successfully!');
 
-    // Show receipt for first sale
-    const firstSale = sales[0];
-    setLastSaleId(firstSale.id);
-    const { data: receiptHtml } = await getSaleReceipt(firstSale.id);
+    // Show receipt for all sales (multi-item cart)
+    const allSaleIds = sales.map((s) => s.id);
+    const { data: receiptHtml } = sales.length > 1
+      ? await getMultiItemReceipt(allSaleIds)
+      : await getSaleReceipt(sales[0].id);
     if (receiptHtml) {
       setReceiptHtml(receiptHtml);
     } else {

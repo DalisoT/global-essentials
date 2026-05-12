@@ -62,6 +62,17 @@ export async function updateProduct(
   const auth = await requireAuth();
   if ('error' in auth) return { data: null, error: auth.error };
   const supabase = auth.supabase;
+
+  if (product.stock_level !== undefined && (isNaN(product.stock_level) || product.stock_level < 0)) {
+    return { data: null, error: 'Stock level cannot be negative' };
+  }
+  if (product.cost_price !== undefined && (isNaN(product.cost_price) || product.cost_price < 0)) {
+    return { data: null, error: 'Cost price cannot be negative' };
+  }
+  if (product.selling_price !== undefined && (isNaN(product.selling_price) || product.selling_price < 0)) {
+    return { data: null, error: 'Selling price cannot be negative' };
+  }
+
   const { data, error } = await supabase
     .from('products')
     .update(product)
