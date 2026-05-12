@@ -100,31 +100,30 @@ export function POSCart({
   };
 
   const importFromContacts = async () => {
-    if (!navigator.contacts) {
+    const contacts = (navigator as Navigator & { contacts?: { select: (props: string[], opts?: { multiple: boolean }) => Promise<Contact[]> } }).contacts;
+    if (!contacts) {
       toast.error('Contacts not supported on this device');
       return;
     }
     try {
-      const permission = await navigator.permissions.query({ name: 'contacts' as PermissionName });
-      if (permission.state === 'denied') {
-        toast.error('Contacts permission denied. Enable in browser settings.');
-        return;
-      }
-      const contacts = await navigator.contacts.select(['name', 'tel'], { multiple: false });
-      if (!contacts || contacts.length === 0) return;
-      const contact = contacts[0];
+      const results = await contacts.select(['name', 'tel'], { multiple: false });
+      if (!results || results.length === 0) return;
+      const contact = results[0];
       const phone = contact.tel?.[0]?.value || '';
       const name = contact.name?.[0] || '';
       if (!phone) {
-        toast.error('No phone number found');
+        toast.error('No phone number found in selected contact');
         return;
       }
       setNewClientName(name);
       setNewClientPhone(phone);
       setShowNewClient(true);
       setShowClientSearch(false);
-    } catch {
-      toast.error('Failed to import contact');
+      toast.success('Contact imported');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      console.error('Contact import failed:', msg);
+      toast.error(`Import failed: ${msg}`);
     }
   };
 
