@@ -71,9 +71,14 @@ export function ProductGrid({ onAddProduct, addedProductIds }: ProductGridProps)
                 inCart
                   ? 'bg-tactical-neon/20 border-2 border-tactical-neon'
                   : 'bg-white/5 border border-white/10 hover:border-white/30',
-                outOfStock && 'opacity-40 cursor-not-allowed'
+                outOfStock && 'opacity-50 cursor-not-allowed'
               )}
             >
+              {outOfStock && (
+                <div className="absolute top-2 left-2 z-10 px-1.5 py-0.5 rounded bg-tactical-red/80 text-white text-[9px] font-black uppercase tracking-wider">
+                  Sold Out
+                </div>
+              )}
               <div className="w-full aspect-square rounded-xl bg-white/5 flex items-center justify-center mb-2 overflow-hidden">
                 {product.image_url ? (
                   <img

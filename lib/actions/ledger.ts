@@ -52,12 +52,104 @@ export async function searchDebts(search?: string) {
     .order('due_date', { ascending: true });
 
   if (search) {
-    query = query.or(`sale.client.full_name.ilike.%${search}%`);
+    const sanitized = search.replace(/[^a-zA-Z0-9_\-% ]/g, '').trim();
+    if (sanitized) {
+      query = query.or(
+        `sale.client.full_name.ilike.%${sanitized}%` +
+        `,sale.id.ilike.%${sanitized}%` +
+        `,sale.product.name.ilike.%${sanitized}%`
+      );
+    }
   }
 
   const { data, error } = await query;
 
   return { data: data || [], error };
+}
+
+export async function getClientPaymentHistory(
+  clientId: string
+): Promise<{ data?: ClientPaymentHistory; error?: string }> {
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const supabase = auth.supabase;
+
+  // Get all sales for this client
+  const { data: sales, error: salesError } = await supabase
+    .from('sales')
+    .select(`
+      id, total_amount, payment_status, payment_method, created_at,
+      product:products(name),
+      installments(*)
+    `)
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: false });
+
+  if (salesError) return { error: salesError.message };
+  if (!sales) return { error: undefined };
+
+  // Get client info
+  const { data: client, error: clientError } = await supabase
+    .from('clients')
+    .select('id, full_name, phone_number')
+    .eq('id', clientId)
+    .single();
+
+  if (clientError) return { error: clientError.message };
+
+  const allInstallments = sales.flatMap((s) => s.installments || []);
+  const totalPaid = allInstallments
+    .filter((i) => i.is_paid)
+    .reduce((sum, i) => sum + (i.amount_paid ?? i.amount_due), 0);
+  const totalDue = allInstallments.reduce((sum, i) => sum + i.amount_due, 0);
+  const totalOverdue = allInstallments
+    .filter((i) => !i.is_paid && new Date(i.due_date) < new Date())
+    .reduce((sum, i) => sum + i.amount_due, 0);
+
+  return {
+    data: {
+      client,
+      sales: sales.map((s) => ({
+        ...s,
+        product: s.product as unknown as { name: string },
+      })),
+      summary: {
+        totalPaid,
+        totalDue,
+        totalOverdue,
+        activeInstallments: allInstallments.filter((i) => !i.is_paid).length,
+        paidInstallments: allInstallments.filter((i) => i.is_paid).length,
+      },
+    },
+  };
+}
+
+interface ClientPaymentHistory {
+  client: { id: string; full_name: string; phone_number: string };
+  sales: Array<{
+    id: string;
+    total_amount: number;
+    payment_status: string;
+    payment_method: string;
+    created_at: string;
+    product: { name: string };
+    installments: Array<{
+      id: string;
+      amount_due: number;
+      amount_paid: number | null;
+      due_date: string;
+      is_paid: boolean;
+      paid_at: string | null;
+      note: string | null;
+    }>;
+  }>;
+  summary: {
+    totalPaid: number;
+    totalDue: number;
+    totalOverdue: number;
+    activeInstallments: number;
+    paidInstallments: number;
+  };
 }
 
 export async function markInstallmentPaid(installmentId: string) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useState, useEffect, useMemo, Suspense, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { cn, formatCurrency } from '@/lib/utils';
@@ -52,6 +52,11 @@ function ImportSimulatorContent() {
   const [showAdvisor, setShowAdvisor] = useState(true);
   const [advisorOutput, setAdvisorOutput] = useState<ImportAdvisorOutput | null>(null);
   const [isLoadingAdvisor, setIsLoadingAdvisor] = useState(false);
+
+  // Derived values defined early so useEffect can reference them
+  const hasRequiredFields = !!(unitCostUSD && parseFloat(unitCostUSD) > 0 && quantity && parseInt(quantity) > 0 && weightPerUnit && parseFloat(weightPerUnit) > 0);
+  const hasPricing = (calculationMode === 'selling_price' && sellingPriceInput && parseFloat(sellingPriceInput) > 0) ||
+    (calculationMode === 'markup' && markupPercentInput && parseFloat(markupPercentInput) > 0);
 
   // Load rates and exchange rate on mount
   useEffect(() => {
@@ -113,46 +118,52 @@ function ImportSimulatorContent() {
     }
   }, [searchParams, setCalculationMode]);
 
-  // Call advisor when inputs change
-  useEffect(() => {
-    if (!hasRequiredFields) {
-      setAdvisorOutput(null);
-      return;
-    }
-    if (!sellingPriceInput && !markupPercentInput) {
-      setAdvisorOutput(null);
-      return;
-    }
+  // Debounced advisor call — avoids hitting Groq API on every keystroke
+  const advisorParamsRef = useRef<Parameters<typeof getImportAdvisor>[0] | null>(null);
+  const advisorRatesRef = useRef<ShippingRate[]>([]);
 
+  const callAdvisor = useCallback(async (params: Parameters<typeof getImportAdvisor>[0], rates: ShippingRate[]) => {
     let cancelled = false;
     setIsLoadingAdvisor(true);
+    try {
+      const { data, error } = await getImportAdvisor(params, rates);
+      if (cancelled) return;
+      if (error) console.error('[ImportSimulator] Advisor error:', error);
+      setAdvisorOutput(data || null);
+    } catch (err) {
+      if (cancelled) return;
+      console.error('[ImportSimulator] Advisor exception:', err);
+      setAdvisorOutput(null);
+    } finally {
+      if (!cancelled) setIsLoadingAdvisor(false);
+    }
+    return () => { cancelled = true; };
+  }, []);
 
-    getImportAdvisor({
-      productName,
-      unitCostUSD: parseFloat(unitCostUSD),
-      quantity: parseInt(quantity),
+  // Debounce: wait 500ms after last input change before calling advisor
+  useEffect(() => {
+    if (!hasRequiredFields) { setAdvisorOutput(null); setIsLoadingAdvisor(false); return; }
+    if (!sellingPriceInput && !markupPercentInput) { setAdvisorOutput(null); setIsLoadingAdvisor(false); return; }
+
+    const params = {
+      productName, unitCostUSD: parseFloat(unitCostUSD), quantity: parseInt(quantity),
       weightPerUnitKg: parseFloat(weightPerUnit),
       volumePerUnitCBM: volumePerUnit ? parseFloat(volumePerUnit) : null,
       exchangeRate,
       sellingPriceLocal: calculationMode === 'selling_price' && sellingPriceInput ? parseFloat(sellingPriceInput) : undefined,
       markupPercent: calculationMode === 'markup' && markupPercentInput ? parseFloat(markupPercentInput) : undefined,
-    }, shippingRates)
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) {
-          console.error('[ImportSimulator] Advisor error:', error);
-        }
-        setAdvisorOutput(data || null);
-        setIsLoadingAdvisor(false);
-      })
-      .catch(err => {
-        if (cancelled) return;
-        console.error('[ImportSimulator] Advisor exception:', err);
-        setIsLoadingAdvisor(false);
-      });
+    };
+    advisorParamsRef.current = params;
+    advisorRatesRef.current = shippingRates;
 
-    return () => { cancelled = true; };
-  }, [productName, unitCostUSD, quantity, weightPerUnit, volumePerUnit, exchangeRate, sellingPriceInput, markupPercentInput, calculationMode, shippingRates]);
+    const timer = setTimeout(() => {
+      if (advisorParamsRef.current) {
+        callAdvisor(advisorParamsRef.current, advisorRatesRef.current);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [productName, unitCostUSD, quantity, weightPerUnit, volumePerUnit, exchangeRate, sellingPriceInput, markupPercentInput, calculationMode, shippingRates, callAdvisor, hasRequiredFields]);
 
   // Calculate result
   const result = useMemo<CalculationResult | null>(() => {
@@ -198,10 +209,6 @@ function ImportSimulatorContent() {
     setShippingType(methodId);
     toast.info(`Switched to ${SHIPPING_TYPES.find(st => st.id === methodId)?.name || methodId}`);
   };
-
-  const hasRequiredFields = unitCostUSD && parseFloat(unitCostUSD) > 0 && quantity && parseInt(quantity) > 0 && weightPerUnit && parseFloat(weightPerUnit) > 0;
-  const hasPricing = (calculationMode === 'selling_price' && sellingPriceInput && parseFloat(sellingPriceInput) > 0) ||
-    (calculationMode === 'markup' && markupPercentInput && parseFloat(markupPercentInput) > 0);
 
   return (
     <div className="space-y-6 pb-32">

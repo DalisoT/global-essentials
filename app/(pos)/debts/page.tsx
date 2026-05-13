@@ -7,11 +7,12 @@ import { generatePaymentReminder } from '@/lib/actions/ai';
 import { markSaleFullyPaid } from '@/lib/actions/sales';
 import { formatCurrency, formatDateShort, isOverdue, getWhatsAppLink } from '@/lib/utils';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
-import { Search, Clock, CheckCircle, MessageCircle, AlertTriangle, Sparkles, Loader2, Bell, BellOff, X, DollarSign } from 'lucide-react';
+import { Search, Clock, CheckCircle, MessageCircle, AlertTriangle, Sparkles, Loader2, Bell, BellOff, X, DollarSign, User, ChevronRight, ArrowLeft } from 'lucide-react';
 import type { Installment } from '@/lib/supabase-types';
 import type { Sale, Product, Client } from '@/lib/supabase-types';
 import { Skeleton, EmptyState } from '@/components/ui/Skeleton';
 import { cn } from '@/lib/utils';
+import { getClientPaymentHistory } from '@/lib/actions/ledger';
 
 interface DebtItem extends Installment {
   sale?: Sale & { product?: Product; client?: Client };
@@ -150,6 +151,9 @@ export default function DebtsPage() {
   const [generatingReminder, setGeneratingReminder] = useState<string | null>(null);
   const [paymentModal, setPaymentModal] = useState<DebtItem | null>(null);
   const [expandedSales, setExpandedSales] = useState<Set<string>>(new Set());
+  const [clientHistory, setClientHistory] = useState<Awaited<ReturnType<typeof getClientPaymentHistory>>['data'] | null>(null);
+  const [clientHistoryLoading, setClientHistoryLoading] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
 
   useEffect(() => {
     loadDebts();
@@ -173,6 +177,19 @@ export default function DebtsPage() {
       else next.add(saleId);
       return next;
     });
+  };
+
+  const handleViewClientHistory = async (clientId: string) => {
+    setClientHistoryLoading(true);
+    setSelectedClientId(clientId);
+    const { data } = await getClientPaymentHistory(clientId);
+    setClientHistory(data ?? null);
+    setClientHistoryLoading(false);
+  };
+
+  const handleBackFromHistory = () => {
+    setClientHistory(null);
+    setSelectedClientId(null);
   };
 
   const handleAiReminder = async (debt: any) => {
@@ -221,14 +238,32 @@ export default function DebtsPage() {
     }
   };
 
+  // Update page title with overdue count
+  useEffect(() => {
+    if (overdueCount > 0) {
+      document.title = `(${overdueCount}) DEBTS — Global Essentials`;
+    } else {
+      document.title = 'DEBTS — Global Essentials';
+    }
+    return () => { document.title = 'DEBTS — Global Essentials'; };
+  }, [overdueCount]);
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center gap-3">
+        {clientHistory && (
+          <button
+            onClick={handleBackFromHistory}
+            className="p-2 rounded-xl bg-white/5 hover:bg-white/10"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+        )}
         <div>
           <h1 className="text-2xl text-tactical text-tactical">DEBTS</h1>
           <p className="text-white/60 text-sm uppercase tracking-wider">
-            Collect Outstanding Payments
+            {clientHistory ? clientHistory.client.full_name : 'Collect Outstanding Payments'}
           </p>
         </div>
         <button
@@ -238,7 +273,8 @@ export default function DebtsPage() {
             isEnabled
               ? 'bg-tactical-neon/20 text-tactical-neon'
               : 'bg-tactical-blue/10 hover:bg-tactical-blue/20 text-tactical-blue'
-          } disabled:opacity-50`}
+          } disabled:opacity-50 ml-auto`
+          }
           title={isEnabled ? 'Notifications enabled' : 'Enable payment reminders'}
         >
           {isEnabled ? (
@@ -399,6 +435,13 @@ export default function DebtsPage() {
                       >
                         <DollarSign className="w-5 h-5" />
                       </button>
+                      <button
+                        onClick={() => debt.sale?.client_id && handleViewClientHistory(debt.sale.client_id)}
+                        className="p-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 transition-colors"
+                        title="View Client History"
+                      >
+                        <User className="w-5 h-5" />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -407,6 +450,80 @@ export default function DebtsPage() {
           </div>
         )}
       </div>
+
+      {/* Client History View */}
+      {clientHistory ? (
+        <div className="space-y-4">
+          {/* Client Summary */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="card-tactical">
+              <p className="text-xs text-white/40 mb-1">Total Paid</p>
+              <p className="text-lg font-black text-green-400">{formatCurrency(clientHistory.summary.totalPaid)}</p>
+            </div>
+            <div className="card-tactical">
+              <p className="text-xs text-white/40 mb-1">Total Due</p>
+              <p className="text-lg font-black text-orange-400">{formatCurrency(clientHistory.summary.totalDue)}</p>
+            </div>
+            {clientHistory.summary.totalOverdue > 0 && (
+              <div className="col-span-2 card-tactical border-tactical-red">
+                <p className="text-xs text-white/40 mb-1">Overdue Amount</p>
+                <p className="text-lg font-black text-tactical-red">{formatCurrency(clientHistory.summary.totalOverdue)}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Sales */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-bold uppercase text-white/60">Purchase History</h3>
+            {clientHistory.sales.map((sale) => {
+              const saleOverdue = sale.installments.some((i) => !i.is_paid && new Date(i.due_date) < new Date());
+              return (
+                <div key={sale.id} className="card-tactical">
+                  <button
+                    onClick={() => toggleSaleExpanded(sale.id)}
+                    className="w-full flex items-center justify-between mb-3"
+                  >
+                    <div className="text-left">
+                      <p className="font-bold text-sm">{sale.product?.name}</p>
+                      <p className="text-xs text-white/40">{new Date(sale.created_at).toLocaleDateString('en-ZM')}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-bold px-2 py-1 rounded ${sale.payment_status === 'paid' ? 'bg-green-500/20 text-green-400' : saleOverdue ? 'bg-red-500/20 text-red-400' : 'bg-orange-500/20 text-orange-400'}`}>
+                        {sale.payment_status === 'paid' ? 'Paid' : saleOverdue ? 'Overdue' : 'Active'}
+                      </span>
+                      <span className="font-black text-sm">{formatCurrency(sale.total_amount)}</span>
+                      <ChevronRight className={cn('w-4 h-4 text-white/40 transition-transform', expandedSales.has(sale.id) && 'rotate-90')} />
+                    </div>
+                  </button>
+
+                  {expandedSales.has(sale.id) && (
+                    <div className="space-y-2 border-t border-white/10 pt-3 mt-3">
+                      {sale.installments.map((inst) => (
+                        <div key={inst.id} className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            {inst.is_paid ? (
+                              <CheckCircle className="w-3.5 h-3.5 text-green-400" />
+                            ) : (
+                              <Clock className={cn('w-3.5 h-3.5', new Date(inst.due_date) < new Date() ? 'text-red-400' : 'text-orange-400')} />
+                            )}
+                            <span className="text-white/60">
+                              {new Date(inst.due_date).toLocaleDateString('en-ZM')}
+                              {inst.note ? ` · ${inst.note}` : ''}
+                            </span>
+                          </div>
+                          <span className={cn('font-bold', inst.is_paid ? 'text-green-400' : 'text-white/80')}>
+                            {formatCurrency(inst.amount_paid ?? (inst.is_paid ? inst.amount_due : 0))} / {formatCurrency(inst.amount_due)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
 
       {paymentModal && (
         <PaymentModal
