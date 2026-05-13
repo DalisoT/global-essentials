@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import { ProductImageCarousel } from './ProductImageCarousel';
 import { ProductDetailClient } from '../product-detail/ProductDetailClient';
 import { TrackView } from '@/components/catalog/TrackView';
+import { CartDrawer } from '@/components/cart/CartDrawer';
 import type { CatalogProductWithImages } from '@/lib/actions/catalog';
 
 export const dynamic = 'force-dynamic';
@@ -77,6 +78,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
       </motion.div>
 
       <ProductDetailClient product={typedProduct} relatedProducts={relatedProducts} catalogProducts={allProducts || []} reviews={reviews || []} ratingStats={ratingStats} />
+      <CartDrawer />
     </div>
   );
 }
