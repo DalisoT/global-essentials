@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getProductById, getCatalogProducts } from '@/lib/actions/catalog';
+import { getProductReviews, getProductRatingStats } from '@/lib/actions/reviews';
 import { ArrowLeft, MessageCircle, Star } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { ProductImageCarousel } from './ProductImageCarousel';
@@ -16,9 +17,11 @@ interface ProductPageProps {
 
 export default async function ProductPage({ params }: ProductPageProps) {
   const { productId } = await params;
-  const [{ data: product }, { data: allProducts }] = await Promise.all([
+  const [{ data: product }, { data: allProducts }, { data: reviews }, ratingStats] = await Promise.all([
     getProductById(productId),
     getCatalogProducts(),
+    getProductReviews(productId),
+    getProductRatingStats(productId),
   ]);
 
   if (!product) {
@@ -73,7 +76,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
         <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black to-transparent" />
       </motion.div>
 
-      <ProductDetailClient product={typedProduct} relatedProducts={relatedProducts} catalogProducts={allProducts || []} />
+      <ProductDetailClient product={typedProduct} relatedProducts={relatedProducts} catalogProducts={allProducts || []} reviews={reviews || []} ratingStats={ratingStats} />
     </div>
   );
 }
