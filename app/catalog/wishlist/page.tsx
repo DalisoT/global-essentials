@@ -1,20 +1,20 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useWishlistStore } from '@/lib/stores/wishlist-store';
 import { AnimatedProductCard } from '../AnimatedProductCard';
 import { Heart, ArrowLeft, Trash2 } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
+import { getCatalogProducts } from '@/lib/actions/catalog';
 import type { CatalogProductWithImages } from '@/lib/actions/catalog';
-import { useCartStore } from '@/lib/stores/cart-store';
 
-interface WishlistPageProps {
-  products: CatalogProductWithImages[];
-}
-
-export default function WishlistPage({ products }: WishlistPageProps) {
+export default function WishlistPage() {
   const { items, clear } = useWishlistStore();
+  const [products, setProducts] = useState<CatalogProductWithImages[]>([]);
+
+  useEffect(() => {
+    getCatalogProducts().then(({ data }) => setProducts(data || []));
+  }, []);
 
   const wishlistProducts = useMemo(() => {
     return items
