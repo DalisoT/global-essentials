@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getOrderById } from '@/lib/actions/catalog-orders';
 import { formatCurrency } from '@/lib/utils';
-import { Check, Package, MapPin } from 'lucide-react';
+import { Check, Package, MapPin, Truck } from 'lucide-react';
 import { OrderStatusBadge } from '@/components/orders/OrderStatusBadge';
 import Link from 'next/link';
 
@@ -9,8 +9,25 @@ interface TrackOrderPageProps {
   params: { orderId: string };
 }
 
+const SHIPPING_TRANSIT: Record<string, number> = {
+  'Air Express': 7,
+  'Air General 7D': 7,
+  'Air Sensitive 14D': 14,
+  'Sea Express VIP': 50,
+  'Standard Delivery': 5,
+  'Express Delivery': 1,
+};
+
+function getEstimatedDelivery(createdAt: string, shippingMethod: string | null): string {
+  const days = shippingMethod ? (SHIPPING_TRANSIT[shippingMethod] ?? 7) : 7;
+  const date = new Date(createdAt);
+  date.setDate(date.getDate() + days);
+  return date.toLocaleDateString('en-ZM', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
 export default async function TrackOrderPage({ params }: TrackOrderPageProps) {
-  const { data: order, error } = await getOrderById(params.orderId);
+  const { orderId } = await params;
+  const { data: order, error } = await getOrderById(orderId);
 
   if (error || !order) {
     notFound();
@@ -35,6 +52,12 @@ export default async function TrackOrderPage({ params }: TrackOrderPageProps) {
           <div className="mt-3">
             <OrderStatusBadge status={order.status} />
           </div>
+          {order.status !== 'delivered' && order.status !== 'cancelled' && (
+            <div className="mt-4 flex items-center justify-center gap-2 text-sm text-white/60">
+              <Truck className="w-4 h-4" />
+              <span>Estimated delivery: <span className="font-bold text-white">{getEstimatedDelivery(order.created_at, order.shipping_method)}</span></span>
+            </div>
+          )}
         </div>
 
         <div className="card-tactical mb-6">

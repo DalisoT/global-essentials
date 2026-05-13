@@ -1,27 +1,46 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { MessageCircle, Check, Star, Shield, Truck } from 'lucide-react';
+import { MessageCircle, Check, Star, Shield, Truck, Share2, ChevronRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { AddToCartButton } from '@/components/cart/AddToCartButton';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, cn } from '@/lib/utils';
 import type { CatalogProductWithImages } from '@/lib/actions/catalog';
 
 interface ProductDetailClientProps {
   product: CatalogProductWithImages;
+  relatedProducts?: CatalogProductWithImages[];
+  catalogProducts?: CatalogProductWithImages[];
 }
 
-export function ProductDetailClient({ product }: ProductDetailClientProps) {
+export function ProductDetailClient({ product, relatedProducts = [], catalogProducts = [] }: ProductDetailClientProps) {
   const [showAdded, setShowAdded] = useState(false);
+
+  const isOnSale = product.catalog_price && product.catalog_price < product.selling_price;
 
   const sendOrder = () => {
     const message = `Hi! I'm interested in ordering:\n\n*${product.name}*\nPrice: ${formatCurrency(product.selling_price)}\n\nPlease let me know how to proceed.`;
     return `https://wa.me/260980062299?text=${encodeURIComponent(message)}`;
   };
 
+  const shareProduct = () => {
+    const shareUrl = `https://global-essentials-zeta.vercel.app/catalog/${product.id}`;
+    const message = `Check out ${product.name} for ${formatCurrency(product.selling_price)} at Global Essentials!`;
+    return `https://wa.me/?text=${encodeURIComponent(message + '\n\n' + shareUrl)}`;
+  };
+
   return (
-    <div className="container mx-auto px-6 -mt-8 relative z-10">
+    <div className="container mx-auto px-6 -mt-8 relative z-10 space-y-6">
+      {/* Sale Badge */}
+      {isOnSale && (
+        <div className="flex items-center justify-center">
+          <div className="px-4 py-2 rounded-full bg-tactical-red text-white text-sm font-black uppercase tracking-wider animate-pulse">
+            🔥 SALE — Save {formatCurrency(product.selling_price - product.catalog_price!)}
+          </div>
+        </div>
+      )}
+
       <div className="max-w-xl mx-auto">
         <motion.div
           className="bg-tactical-slate rounded-3xl p-6 space-y-6 border border-white/10"
@@ -35,9 +54,22 @@ export function ProductDetailClient({ product }: ProductDetailClientProps) {
             transition={{ duration: 0.4, delay: 0.3 }}
           >
             <h1 className="text-3xl font-black tracking-tight mb-2">{product.name}</h1>
-            <p className="text-4xl font-black text-tactical-neon">
-              {formatCurrency(product.selling_price)}
-            </p>
+            <div className="flex items-center gap-3">
+              {isOnSale ? (
+                <>
+                  <p className="text-4xl font-black text-tactical-neon">
+                    {formatCurrency(product.catalog_price!)}
+                  </p>
+                  <p className="text-xl text-white/40 line-through">
+                    {formatCurrency(product.selling_price)}
+                  </p>
+                </>
+              ) : (
+                <p className="text-4xl font-black text-tactical-neon">
+                  {formatCurrency(product.selling_price)}
+                </p>
+              )}
+            </div>
           </motion.div>
 
           <motion.div
@@ -56,7 +88,14 @@ export function ProductDetailClient({ product }: ProductDetailClientProps) {
             <span className="text-sm font-semibold uppercase tracking-wide text-white/60">
               {product.stock_level > 0 ? 'In Stock' : 'Out of Stock'}
             </span>
-            {product.stock_level > 0 && product.stock_level <= 5 && (
+            {product.stock_level > 0 && product.stock_level <= 3 && (
+              <motion.span
+                className="text-xs font-bold text-tactical-red uppercase tracking-wide ml-2 animate-pulse"
+              >
+                🔥 Only {product.stock_level} left!
+              </motion.span>
+            )}
+            {product.stock_level > 3 && product.stock_level <= 5 && (
               <motion.span
                 className="text-xs font-bold text-tactical-orange uppercase tracking-wide ml-2"
                 animate={{ opacity: [0.5, 1, 0.5] }}
@@ -108,7 +147,7 @@ export function ProductDetailClient({ product }: ProductDetailClientProps) {
                 transition={{ duration: 0.4, delay: 0.6 }}
               >
                 <MessageCircle className="w-5 h-5" />
-                Or order via WhatsApp
+                Order via WhatsApp
               </motion.a>
             </>
           ) : (
@@ -128,6 +167,15 @@ export function ProductDetailClient({ product }: ProductDetailClientProps) {
             </motion.a>
           )}
 
+          {/* Share Button */}
+          <button
+            onClick={() => window.open(shareProduct(), '_blank')}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border border-white/10 text-white/50 font-bold hover:bg-white/5 transition-all"
+          >
+            <Share2 className="w-5 h-5" />
+            Share via WhatsApp
+          </button>
+
           <motion.p
             className="text-center text-xs text-white/30 uppercase tracking-wide"
             initial={{ opacity: 0 }}
@@ -138,6 +186,36 @@ export function ProductDetailClient({ product }: ProductDetailClientProps) {
           </motion.p>
         </motion.div>
       </div>
+
+      {/* Related Products */}
+      {relatedProducts.length > 0 && (
+        <div className="max-w-xl mx-auto">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-white/60 mb-3">
+            You May Also Like
+          </h3>
+          <div className="flex gap-3 overflow-x-auto pb-2 -mx-6 px-6 scrollbar-hide">
+            {relatedProducts.slice(0, 6).map((rp) => (
+              <Link
+                key={rp.id}
+                href={`/catalog/${rp.id}`}
+                className="flex-shrink-0 w-32 group"
+              >
+                <div className="w-32 h-32 rounded-xl bg-white/5 overflow-hidden mb-2">
+                  {rp.images[0] ? (
+                    <img src={rp.images[0]} alt={rp.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Star className="w-8 h-8 text-white/10" />
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs font-bold truncate">{rp.name}</p>
+                <p className="text-sm text-tactical-neon font-black">{formatCurrency(rp.selling_price)}</p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

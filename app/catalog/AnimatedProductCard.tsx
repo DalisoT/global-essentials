@@ -3,13 +3,16 @@
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageCircle, Star, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { MessageCircle, Star, ChevronLeft, ChevronRight, X, Heart } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
+import { useWishlistStore } from '@/lib/stores/wishlist-store';
+import { cn } from '@/lib/utils';
 
 interface Product {
   id: string;
   name: string;
   selling_price: number;
+  catalog_price?: number | null;
   image_url: string | null;
   image_urls: string[] | null;
   stock_level: number;
@@ -24,6 +27,11 @@ interface AnimatedProductCardProps {
 export function AnimatedProductCard({ product, index }: AnimatedProductCardProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const { isInWishlist, toggleItem } = useWishlistStore();
+
+  const inWishlist = isInWishlist(product.id);
+  const isOnSale = product.catalog_price && product.catalog_price < product.selling_price;
 
   // Build images array from image_urls with fallback to image_url
   const images = product.image_urls && product.image_urls.length > 0
@@ -49,15 +57,10 @@ export function AnimatedProductCard({ product, index }: AnimatedProductCardProps
     });
   };
 
-  const goToDetail = useCallback(() => {
-    // Don't navigate if lightbox is open
-    if (lightboxOpen) return false;
-    return true;
-  }, [lightboxOpen]);
-
   // Stock status
   const getStockStatus = () => {
     if (product.stock_level === 0) return { label: 'Out of Stock', class: 'bg-tactical-red/80' };
+    if (product.stock_level <= 3) return { label: `🔥 Only ${product.stock_level} left!`, class: 'bg-tactical-red animate-pulse' };
     if (product.stock_level <= 5) return { label: 'Low Stock', class: 'bg-tactical-orange/80' };
     return { label: 'In Stock', class: 'bg-tactical-neon/80' };
   };
@@ -75,6 +78,8 @@ export function AnimatedProductCard({ product, index }: AnimatedProductCardProps
           ease: [0.25, 0.46, 0.45, 0.94],
         }}
         whileHover={{ scale: 1.02 }}
+        onHoverStart={() => setIsHovered(true)}
+        onHoverEnd={() => setIsHovered(false)}
       >
         <div className="group relative bg-gradient-to-br from-white/5 to-white/[0.02] rounded-3xl overflow-hidden border border-white/10 hover:border-tactical-blue/50 transition-all duration-300 hover:shadow-lg hover:shadow-tactical-blue/20">
           {/* Product Image with Carousel */}
@@ -96,38 +101,40 @@ export function AnimatedProductCard({ product, index }: AnimatedProductCardProps
                   }}
                 />
 
-                {/* Carousel Navigation */}
-                {hasMultiple && (
+                {/* Carousel Navigation — visible on hover */}
+                {hasMultiple && isHovered && (
                   <>
                     <button
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); paginate(-1); }}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-white/80 hover:text-white hover:bg-black/80 transition-all opacity-0 group-hover:opacity-100"
+                      className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-white/80 hover:text-white hover:bg-black/80 transition-all"
                       aria-label="Previous image"
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
                     <button
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); paginate(1); }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-white/80 hover:text-white hover:bg-black/80 transition-all opacity-0 group-hover:opacity-100"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-white/80 hover:text-white hover:bg-black/80 transition-all"
                       aria-label="Next image"
                     >
                       <ChevronRight className="w-4 h-4" />
                     </button>
-
-                    {/* Dots */}
-                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-                      {images.map((_, idx) => (
-                        <button
-                          key={idx}
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCurrentIndex(idx); }}
-                          className={`w-1.5 h-1.5 rounded-full transition-all ${
-                            idx === currentIndex ? 'bg-tactical-neon w-3' : 'bg-white/40 hover:bg-white/60'
-                          }`}
-                          aria-label={`Go to image ${idx + 1}`}
-                        />
-                      ))}
-                    </div>
                   </>
+                )}
+
+                {/* Dots — visible on hover if multiple images */}
+                {hasMultiple && isHovered && (
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                    {images.map((_, idx) => (
+                      <button
+                        key={idx}
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCurrentIndex(idx); }}
+                        className={`w-1.5 h-1.5 rounded-full transition-all ${
+                          idx === currentIndex ? 'bg-tactical-neon w-3' : 'bg-white/40 hover:bg-white/60'
+                        }`}
+                        aria-label={`Go to image ${idx + 1}`}
+                      />
+                    ))}
+                  </div>
                 )}
               </>
             ) : (
@@ -139,10 +146,31 @@ export function AnimatedProductCard({ product, index }: AnimatedProductCardProps
               </div>
             )}
 
+            {/* SALE Badge */}
+            {isOnSale && (
+              <div className="absolute top-3 left-3 px-2 py-0.5 rounded bg-tactical-red text-white text-[10px] font-black uppercase tracking-wider z-10">
+                SALE
+              </div>
+            )}
+
             {/* Stock Badge */}
-            <div className={`absolute top-3 left-3 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${stockStatus.class} text-black`}>
+            <div className={`absolute top-3 right-12 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${stockStatus.class} text-black`}>
               {stockStatus.label}
             </div>
+
+            {/* Wishlist Heart Button */}
+            <button
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleItem(product.id); }}
+              className={cn(
+                'absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center transition-all z-10',
+                inWishlist
+                  ? 'bg-tactical-red text-white'
+                  : 'bg-black/60 text-white hover:bg-tactical-red/80'
+              )}
+              aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+            >
+              <Heart className={cn('w-4 h-4', inWishlist && 'fill-white')} />
+            </button>
 
             {/* Quick Order Button - Hidden, will be on detail page */}
           </div>
@@ -153,9 +181,22 @@ export function AnimatedProductCard({ product, index }: AnimatedProductCardProps
             {product.description && (
               <p className="text-xs text-white/50 mb-2 line-clamp-2">{product.description}</p>
             )}
-            <p className="text-xl font-black text-tactical-neon">
-              {formatCurrency(product.selling_price)}
-            </p>
+            <div className="flex items-center gap-2">
+              {isOnSale ? (
+                <>
+                  <p className="text-xl font-black text-tactical-neon">
+                    {formatCurrency(product.catalog_price!)}
+                  </p>
+                  <p className="text-sm text-white/40 line-through">
+                    {formatCurrency(product.selling_price)}
+                  </p>
+                </>
+              ) : (
+                <p className="text-xl font-black text-tactical-neon">
+                  {formatCurrency(product.selling_price)}
+                </p>
+              )}
+            </div>
           </Link>
         </div>
       </motion.div>

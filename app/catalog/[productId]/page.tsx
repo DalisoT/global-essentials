@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getProductById } from '@/lib/actions/catalog';
+import { getProductById, getCatalogProducts } from '@/lib/actions/catalog';
 import { ArrowLeft, MessageCircle, Star } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { ProductImageCarousel } from './ProductImageCarousel';
 import { ProductDetailClient } from '../product-detail/ProductDetailClient';
+import { TrackView } from '@/components/catalog/TrackView';
 import type { CatalogProductWithImages } from '@/lib/actions/catalog';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +16,10 @@ interface ProductPageProps {
 
 export default async function ProductPage({ params }: ProductPageProps) {
   const { productId } = await params;
-  const { data: product } = await getProductById(productId);
+  const [{ data: product }, { data: allProducts }] = await Promise.all([
+    getProductById(productId),
+    getCatalogProducts(),
+  ]);
 
   if (!product) {
     notFound();
@@ -23,8 +27,15 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
   const typedProduct = product as CatalogProductWithImages;
 
+  // Get related products: same category, excluding current
+  const relatedProducts = (allProducts || []).filter(
+    (p) => p.id !== typedProduct.id
+  ).slice(0, 6);
+
   return (
     <div className="min-h-screen bg-black pb-20">
+      <TrackView productId={productId} />
+
       <motion.div
         className="sticky top-0 z-10 bg-black/80 backdrop-blur-lg border-b border-white/10"
         initial={{ opacity: 0, y: -10 }}
@@ -62,7 +73,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
         <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black to-transparent" />
       </motion.div>
 
-      <ProductDetailClient product={typedProduct} />
+      <ProductDetailClient product={typedProduct} relatedProducts={relatedProducts} catalogProducts={allProducts || []} />
     </div>
   );
 }
