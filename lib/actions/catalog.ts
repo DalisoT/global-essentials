@@ -6,6 +6,7 @@ export interface CatalogProductWithImages {
   id: string;
   name: string;
   selling_price: number;
+  catalog_price?: number | null;
   image_url: string | null;
   image_urls: string[] | null;
   stock_level: number;
@@ -17,13 +18,15 @@ export async function getCatalogProducts() {
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from('products')
-    .select('id, name, selling_price, image_url, image_urls, stock_level, description')
+    .select('id, name, selling_price, catalog_price, image_url, image_urls, stock_level, description')
+    .eq('is_visible_in_catalog', true)
     .gt('stock_level', 0)
     .order('name', { ascending: true });
 
-  // Transform to use image_urls if available, with fallback to image_url
+  // Transform: use catalog_price if set, fall back to selling_price
   const products: CatalogProductWithImages[] = (data || []).map((p) => ({
     ...p,
+    selling_price: p.catalog_price ?? p.selling_price,
     images: p.image_urls && p.image_urls.length > 0
       ? p.image_urls
       : p.image_url

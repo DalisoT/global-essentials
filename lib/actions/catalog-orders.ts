@@ -174,10 +174,45 @@ export async function updateOrderStatus(
 ): Promise<{ error: string | null }> {
   const supabase = await createServerSupabaseClient();
 
+  // Fetch order items before updating status (for stock restoration on cancel)
+  const { data: items } = await supabase
+    .from('order_items')
+    .select('product_id, quantity')
+    .eq('order_id', orderId);
+
+  // Build update payload
+  const updates: Record<string, unknown> = {
+    status,
+    updated_at: new Date().toISOString(),
+  };
+  if (status === 'cancelled') {
+    updates.cancelled_at = new Date().toISOString();
+  }
+
   const { error } = await supabase
     .from('orders')
-    .update({ status, updated_at: new Date().toISOString() })
+    .update(updates)
     .eq('id', orderId);
 
-  return { error: error?.message || null };
+  if (error) return { error: error.message };
+
+  // Restore stock if cancelling
+  if (status === 'cancelled' && items) {
+    for (const item of items) {
+      const { data: product } = await supabase
+        .from('products')
+        .select('stock_level')
+        .eq('id', item.product_id)
+        .single();
+
+      if (product) {
+        await supabase
+          .from('products')
+          .update({ stock_level: product.stock_level + item.quantity })
+          .eq('id', item.product_id);
+      }
+    }
+  }
+
+  return { error: null };
 }

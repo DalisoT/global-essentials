@@ -24,6 +24,8 @@ export async function createProduct(product: {
   selling_price: number;
   stock_level: number;
   image_urls?: string[];
+  is_visible_in_catalog?: boolean;
+  catalog_price?: number | null;
 }) {
   const auth = await requireAuth();
   if ('error' in auth) return { data: null, error: auth.error };
@@ -42,6 +44,8 @@ export async function createProduct(product: {
       selling_price: product.selling_price,
       stock_level: product.stock_level,
       image_urls: product.image_urls || null,
+      is_visible_in_catalog: product.is_visible_in_catalog ?? true,
+      catalog_price: product.catalog_price ?? null,
     }])
     .select()
     .single();
@@ -57,6 +61,8 @@ export async function updateProduct(
     selling_price?: number;
     stock_level?: number;
     image_urls?: string[];
+    is_visible_in_catalog?: boolean;
+    catalog_price?: number | null;
   }
 ) {
   const auth = await requireAuth();

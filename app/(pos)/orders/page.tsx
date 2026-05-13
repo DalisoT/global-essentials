@@ -2,11 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import { getOrders, updateOrderStatus } from '@/lib/actions/catalog-orders';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, getWhatsAppLink } from '@/lib/utils';
 import { Package, Truck, Check, X, Phone, MapPin, Search } from 'lucide-react';
 import { OrderStatusBadge } from '@/components/orders/OrderStatusBadge';
 import { toast } from 'sonner';
 import type { OrderWithItems } from '@/lib/supabase-types';
+
+const WHATSAPP_TEMPLATES: Record<string, string> = {
+  confirmed: "Hi {name}, your order {number} has been confirmed! We'll start preparing it shortly.",
+  shipped: "Hi {name}, your order {number} is now out for delivery!",
+  delivered: "Hi {name}, your order {number} has been delivered. Thank you for shopping with us!",
+  cancelled: "Hi {name}, your order {number} has been cancelled. Please contact us if you have questions.",
+};
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
@@ -27,6 +34,9 @@ export default function OrdersPage() {
   }, [statusFilter]);
 
   const handleStatusUpdate = async (orderId: string, newStatus: OrderWithItems['status']) => {
+    // Get the order before updating (for WhatsApp notification)
+    const order = orders.find((o) => o.id === orderId);
+
     const { error } = await updateOrderStatus(orderId, newStatus);
 
     if (error) {
@@ -39,6 +49,16 @@ export default function OrdersPage() {
 
     if (selectedOrder?.id === orderId) {
       setSelectedOrder({ ...selectedOrder, status: newStatus });
+    }
+
+    // Send WhatsApp notification for status transitions with templates
+    const template = WHATSAPP_TEMPLATES[newStatus];
+    if (template && order?.customer_phone) {
+      const message = template
+        .replace('{name}', order.customer_name)
+        .replace('{number}', order.order_number);
+      const phone = order.customer_phone.replace(/\D/g, '');
+      window.open(getWhatsAppLink(phone, message), '_blank');
     }
   };
 

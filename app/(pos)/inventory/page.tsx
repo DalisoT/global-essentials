@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { getInventory, createProduct, updateProduct, deleteProduct } from '@/lib/actions/inventory';
 import { formatCurrency } from '@/lib/utils';
-import { Package, Plus, X, Pencil, Trash2, Search, ImagePlus, Upload, XCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Package, Plus, X, Pencil, Trash2, Search, ImagePlus, Upload, XCircle, ChevronLeft, ChevronRight, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Product } from '@/lib/supabase-types';
 import { Skeleton, SkeletonCard, EmptyState } from '@/components/ui/Skeleton';
@@ -27,6 +27,8 @@ function InventoryContent() {
   const [name, setName] = useState('');
   const [costPrice, setCostPrice] = useState('');
   const [sellingPrice, setSellingPrice] = useState('');
+  const [catalogPrice, setCatalogPrice] = useState('');
+  const [isVisibleInCatalog, setIsVisibleInCatalog] = useState(true);
   const [stockLevel, setStockLevel] = useState('');
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
@@ -72,6 +74,8 @@ function InventoryContent() {
     setName('');
     setCostPrice('');
     setSellingPrice('');
+    setCatalogPrice('');
+    setIsVisibleInCatalog(true);
     setStockLevel('');
     setImageUrls([]);
     setImageFiles([]);
@@ -90,6 +94,8 @@ function InventoryContent() {
     setName(product.name);
     setCostPrice(product.cost_price.toString());
     setSellingPrice(product.selling_price.toString());
+    setCatalogPrice(product.catalog_price?.toString() || '');
+    setIsVisibleInCatalog(product.is_visible_in_catalog ?? true);
     setStockLevel(product.stock_level.toString());
     const existingUrls = product.image_urls && product.image_urls.length > 0
       ? product.image_urls
@@ -136,6 +142,8 @@ function InventoryContent() {
       selling_price: parseFloat(sellingPrice),
       stock_level: parseInt(stockLevel),
       image_urls: finalImageUrls.length > 0 ? finalImageUrls : undefined,
+      is_visible_in_catalog: isVisibleInCatalog,
+      catalog_price: catalogPrice ? parseFloat(catalogPrice) : null,
     };
 
     const { error } = editingProduct
@@ -317,6 +325,12 @@ function InventoryContent() {
                   ) : (
                     <Package className="w-12 h-12 text-white/20" />
                   )}
+                  {/* Visibility indicator */}
+                  {(product as any).is_visible_in_catalog !== false && (
+                    <div className="absolute top-2 left-2 w-6 h-6 rounded-full bg-tactical-neon/80 flex items-center justify-center" title="Visible in catalog">
+                      <Eye className="w-3 h-3 text-black" />
+                    </div>
+                  )}
                 </div>
 
                 {/* Info */}
@@ -415,6 +429,48 @@ function InventoryContent() {
                     placeholder="0.00"
                     className="w-full h-14 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/40 focus:outline-none focus:border-tactical-blue"
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-white/60 mb-2 block">
+                    Catalog Price (optional)
+                  </label>
+                  <input
+                    type="number"
+                    value={catalogPrice}
+                    onChange={(e) => setCatalogPrice(e.target.value)}
+                    placeholder="Leave blank to use selling price"
+                    className="w-full h-14 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/40 focus:outline-none focus:border-tactical-blue"
+                  />
+                </div>
+                <div className="flex flex-col justify-end">
+                  <label className="text-xs font-bold uppercase tracking-wider text-white/60 mb-2 block">
+                    Visible in Catalog
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsVisibleInCatalog(!isVisibleInCatalog)}
+                    className={cn(
+                      'h-14 rounded-xl border font-bold flex items-center justify-center gap-2 transition-all',
+                      isVisibleInCatalog
+                        ? 'bg-tactical-neon/20 border-tactical-neon text-tactical-neon'
+                        : 'bg-white/5 border-white/10 text-white/40'
+                    )}
+                  >
+                    {isVisibleInCatalog ? (
+                      <>
+                        <Eye className="w-4 h-4" />
+                        Visible
+                      </>
+                    ) : (
+                      <>
+                        <EyeOff className="w-4 h-4" />
+                        Hidden
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
 

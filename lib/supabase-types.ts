@@ -7,6 +7,8 @@ export interface Product {
   image_url: string | null;
   image_urls: string[] | null;
   category_id: string | null;
+  is_visible_in_catalog?: boolean;
+  catalog_price?: number | null;
   created_at: string;
   updated_at: string;
 }
