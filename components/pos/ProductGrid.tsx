@@ -60,6 +60,14 @@ export function ProductGrid({ onAddProduct, addedProductIds }: ProductGridProps)
         {filtered.map((product) => {
           const inCart = addedProductIds.has(product.id);
           const outOfStock = product.stock_level <= 0;
+          const marginPct = product.selling_price > 0
+            ? ((product.selling_price - product.cost_price) / product.selling_price) * 100
+            : 0;
+          const marginDot =
+            marginPct < 0  ? 'bg-white/60' :
+            marginPct < 20 ? 'bg-tactical-red' :
+            marginPct < 40 ? 'bg-tactical-orange' :
+                             'bg-tactical-neon';
 
           return (
             <button
@@ -99,9 +107,19 @@ export function ProductGrid({ onAddProduct, addedProductIds }: ProductGridProps)
               <p className="text-tactical-neon font-black text-sm">
                 {formatCurrency(product.selling_price)}
               </p>
-              <p className="text-[10px] text-white/40 mt-0.5">
-                {outOfStock ? 'Out of stock' : `Stock: ${product.stock_level}`}
-              </p>
+              <div className="flex items-center justify-between mt-0.5">
+                <p className="text-[10px] text-white/40">
+                  {outOfStock ? 'Out of stock' : `Stock: ${product.stock_level}`}
+                </p>
+                {product.selling_price > 0 && (
+                  <div className="flex items-center gap-1" title={`Gross margin ${marginPct.toFixed(1)}%`}>
+                    <div className={cn('w-1.5 h-1.5 rounded-full', marginDot)} />
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-white/50 tabular-nums">
+                      {marginPct.toFixed(0)}%
+                    </span>
+                  </div>
+                )}
+              </div>
               {inCart && (
                 <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-tactical-neon flex items-center justify-center">
                   <span className="text-black text-[10px] font-bold">+</span>

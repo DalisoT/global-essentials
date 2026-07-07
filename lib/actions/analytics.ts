@@ -58,11 +58,20 @@ export async function getAnalyticsData() {
     .slice(0, 5)
     .map(([productId, count]) => {
       const product = products?.find((p: Product) => p.id === productId);
+      const sell = product?.selling_price || 0;
+      const cost = product?.cost_price || 0;
+      const revenue = count * sell;
+      const cogs = count * cost;
+      const profit = revenue - cogs;
+      const marginPct = sell > 0 ? ((sell - cost) / sell) * 100 : 0;
       return {
         id: productId,
         name: product?.name || 'Unknown',
         count,
-        revenue: count * (product?.selling_price || 0),
+        revenue,
+        cogs,
+        profit,
+        gross_margin_pct: marginPct,
       };
     });
 

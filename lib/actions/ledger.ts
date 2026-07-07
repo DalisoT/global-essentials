@@ -1,6 +1,7 @@
 'use server';
 
 import { createServerSupabaseClient, requireAuth } from '@/lib/supabase-server';
+import { postInstallmentPaymentJournal } from '@/lib/actions/journals';
 
 export async function getSalesHistory(
   search?: string,
@@ -300,6 +301,23 @@ export async function recordInstallmentPayment({
       .update({ payment_status: 'paid' })
       .eq('id', installment.sale_id);
   }
+
+  // Phase 1: post journal entry (best-effort)
+  const { data: saleWithClient } = await supabase
+    .from('sales')
+    .select('client:clients(full_name)')
+    .eq('id', installment.sale_id)
+    .single();
+  const clientName =
+    (saleWithClient as unknown as { client?: { full_name?: string } })?.client?.full_name
+    || 'Unknown client';
+
+  postInstallmentPaymentJournal({
+    installmentId,
+    amount: amountPaid,
+    clientName,
+    paymentMethod: 'cash',
+  }).catch(err => console.error('Failed to post installment journal:', err));
 
   return { data: null, error: null };
 }

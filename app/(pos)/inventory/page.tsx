@@ -298,6 +298,14 @@ function InventoryContent() {
           {filteredProducts.map((product) => {
             const productImageUrls = product.image_urls || [];
             const firstImage = productImageUrls[0] || product.image_url;
+            const marginPct = product.selling_price > 0
+              ? ((product.selling_price - product.cost_price) / product.selling_price) * 100
+              : 0;
+            const marginTone =
+              marginPct < 0  ? 'bg-white/20 text-white/60'         :
+              marginPct < 20 ? 'bg-tactical-red/20 text-tactical-red' :
+              marginPct < 40 ? 'bg-tactical-orange/20 text-tactical-orange' :
+                               'bg-tactical-neon/20 text-tactical-neon';
             return (
               <div
                 key={product.id}
@@ -329,6 +337,18 @@ function InventoryContent() {
                   {(product as any).is_visible_in_catalog !== false && (
                     <div className="absolute top-2 left-2 w-6 h-6 rounded-full bg-tactical-neon/80 flex items-center justify-center" title="Visible in catalog">
                       <Eye className="w-3 h-3 text-black" />
+                    </div>
+                  )}
+                  {/* Margin badge */}
+                  {product.selling_price > 0 && (
+                    <div
+                      className={cn(
+                        'absolute top-2 right-2 px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider',
+                        marginTone
+                      )}
+                      title={`Gross margin ${marginPct.toFixed(1)}%`}
+                    >
+                      {marginPct >= 0 ? '' : '-'}{Math.abs(marginPct).toFixed(0)}%
                     </div>
                   )}
                 </div>

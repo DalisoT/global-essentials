@@ -1,6 +1,7 @@
 'use server';
 
 import { createServerSupabaseClient, requireAuth } from '@/lib/supabase-server';
+import { postExpenseJournal } from '@/lib/actions/journals';
 
 export async function getExpenses(
   search?: string,
@@ -54,6 +55,16 @@ export async function createExpense({
     .insert([{ description: description.trim(), amount, category: category.trim() }])
     .select()
     .single();
+
+  // Phase 1: post journal entry (best-effort)
+  if (data && !error) {
+    postExpenseJournal({
+      expenseId: data.id,
+      amount,
+      description: description.trim(),
+      category: category.trim(),
+    }).catch(err => console.error('Failed to post expense journal:', err));
+  }
 
   return { data, error };
 }

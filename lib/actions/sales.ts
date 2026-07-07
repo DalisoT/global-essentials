@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient, requireAuth } from '@/lib/supabase-server';
 import { MIN_INSTALLMENT_MONTHS, MAX_INSTALLMENT_MONTHS } from '@/lib/config';
+import { postSaleJournal } from '@/lib/actions/journals';
 
 export async function createSale({
   items,
@@ -212,7 +213,64 @@ export async function createSale({
     // Stock already decremented upfront with optimistic lock above
   }
 
+  // Phase 1: post the journal entry. Failures here don't roll back the sale —
+  // the sale is real, the books will be slightly out until repaired.
+  postJournalForSales(createdSales, items, client_id, payment_method).catch(err => {
+    console.error('Failed to post sale journal:', err);
+  });
+
   return { data: createdSales, error: null };
+}
+
+/**
+ * Internal helper called by createSale.
+ * Loads the product cost prices + client name and posts the journal entry.
+ */
+async function postJournalForSales(
+  sales: Array<{ id: string; total_amount: number }>,
+  items: Array<{ product_id: string; quantity: number }>,
+  client_id: string,
+  payment_method: 'cash' | 'pay-slow'
+) {
+  const auth = await requireAuth();
+  if ('error' in auth) return;
+  const supabase = auth.supabase;
+
+  const productIds = items.map(i => i.product_id);
+  const { data: products } = await supabase
+    .from('products')
+    .select('id, name, cost_price, selling_price')
+    .in('id', productIds);
+  const { data: client } = await supabase
+    .from('clients')
+    .select('id, full_name')
+    .eq('id', client_id)
+    .single();
+
+  // Aggregate items by product for posting
+  const aggregated = items.map(item => {
+    const product = products?.find(p => p.id === item.product_id);
+    return {
+      productName: product?.name || 'Unknown',
+      quantity: item.quantity,
+      sellingPrice: product?.selling_price || 0,
+      costPrice: product?.cost_price || 0,
+    };
+  });
+
+  const totalAmount = sales.reduce((s, x) => s + x.total_amount, 0);
+  // For cash sales, full amount is upfront; for pay-slow we post the sale at face
+  // and treat the upfront installment (if any) as the cash portion.
+  const upfrontPaid = payment_method === 'cash' ? totalAmount : 0;
+
+  await postSaleJournal({
+    saleId: sales[0]?.id || '00000000-0000-0000-0000-000000000000',
+    items: aggregated,
+    upfrontPaid,
+    totalAmount,
+    paymentMethod,
+    clientName: client?.full_name || 'Unknown client',
+  });
 }
 
 export async function getProducts() {
