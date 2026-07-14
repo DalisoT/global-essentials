@@ -85,11 +85,11 @@
 ## 3B — UI
 
 - [ ] **3B.1.** Create route `/(pos)/cfo/` with chat layout
-- [ ] **3B.2.** Build `<CFOChatPanel>` — streaming-friendly message list,
+- [x] **3B.2.** Build `<CFOChatPanel>` — streaming-friendly message list,
       auto-scroll, suggestion chips ("What's my net profit this month?",
       "Which products are my profit engines?", "How much cash will I have in
       30 days?")
-- [ ] **3B.3.** Build `<CFOAnswerCard>` — renders AI text + a small "based on"
+- [x] **3B.3.** Build `<CFOAnswerCard>` — renders AI text + a small "based on"
       disclosure showing which tool calls were used + the numbers
 - [ ] **3B.4.** Add "AI" entry to POS drawer + bottom nav (replace nothing,
       add as 6th item only on wide screens, or surface from dashboard widget
