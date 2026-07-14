@@ -103,7 +103,7 @@
       expected answer shape (golden set)
 - [ ] **3C.2.** Add rate limiting: max 30 questions/user/day (configurable in
       `lib/config.ts`)
-- [ ] **3C.3.** Add fallback response when Groq is unavailable (template
+- [x] **3C.3.** Add fallback response when Groq is unavailable (template
       "I couldn't reach the AI right now, but here's the raw data: ...")
 
 ---
