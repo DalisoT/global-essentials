@@ -31,3 +31,11 @@ export const FALLBACK_EXCHANGE_RATES = {
 // to disable the cap entirely (e.g. for testing). Default 30 — generous
 // enough that a single owner won't hit it during normal use.
 export const CFO_DAILY_LIMIT = parseInt(process.env.CFO_DAILY_LIMIT || '30', 10);
+
+// Learning Academy quiz generation rate limit (4B.1). Per-user, per-day.
+// Default 10 — a user can re-take a quiz up to 10 times across all
+// lessons before hitting the cap. Set LESSON_QUIZ_DAILY_LIMIT=0 to disable.
+export const LESSON_QUIZ_DAILY_LIMIT = parseInt(
+  process.env.LESSON_QUIZ_DAILY_LIMIT || '10',
+  10
+);

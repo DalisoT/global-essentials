@@ -153,7 +153,7 @@ Operations & Scaling
 
 ## 4B — Generation pipeline
 
-- [ ] **4B.1.** Server action `generatePersonalizedQuiz(lessonId)` — Groq reads
+- [x] **4B.1.** Server action `generatePersonalizedQuiz(lessonId)` — Groq reads
       lesson + your actual data (sales, profit, debt aging, inventory) and
       returns 3-5 multiple-choice questions with explanations
 - [ ] **4B.2.** Server action `generateLessonAudio(lessonId)` — optional Groq
