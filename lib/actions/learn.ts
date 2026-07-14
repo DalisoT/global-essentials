@@ -30,6 +30,7 @@ import { lessonQuiz } from '@/lib/ai/prompts';
 import type { QuizDataContext } from '@/lib/ai/prompts/lesson-quiz';
 import { cfoToolHandlers } from '@/lib/ai/cfo-tools';
 import { getDashboardStats } from '@/lib/actions/dashboard';
+import type { Pillar, Lesson } from '@/lib/supabase-types';
 
 // ─────────────────────────────────────────────────────────────────────
 // Public types
@@ -51,6 +52,124 @@ export interface Quiz {
   usage: { promptTokens: number; completionTokens: number; totalTokens: number };
   generatedAt: string;
 }
+
+/** A pillar with its lesson count, ready for the pillar grid UI. */
+export interface PillarWithCount extends Pillar {
+  lessonCount: number;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Read actions
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Fetch every active pillar, plus the number of published lessons
+ * under each. Used by `/(pos)/learn/` (4C.1) to render the pillar grid.
+ *
+ * We do the lesson count in a single follow-up query (not as a JOIN)
+ * because Supabase PostgREST doesn't yet do relational counts cleanly
+ * for our `is_published` filter on the join — a separate COUNT query
+ * is simpler and the result set is tiny (4 pillars, 14 lessons total).
+ */
+export async function getPillars(): Promise<{
+  data?: PillarWithCount[];
+  error?: string;
+}> {
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const supabase = auth.supabase;
+
+  const { data: pillars, error: pillarsError } = await supabase
+    .from('pillars')
+    .select('*')
+    .eq('is_active', true)
+    .order('display_order', { ascending: true });
+
+  if (pillarsError) return { error: pillarsError.message };
+  if (!pillars || pillars.length === 0) return { data: [] };
+
+  // Count lessons per pillar. We use a single SELECT with grouping
+  // (head: false, count: exact) to get all the counts in one round trip.
+  const { data: lessonRows, error: lessonsError } = await supabase
+    .from('lessons')
+    .select('pillar_id')
+    .eq('is_published', true);
+
+  if (lessonsError) return { error: lessonsError.message };
+
+  const counts = new Map<string, number>();
+  for (const row of (lessonRows ?? []) as Array<{ pillar_id: string }>) {
+    counts.set(row.pillar_id, (counts.get(row.pillar_id) ?? 0) + 1);
+  }
+
+  const enriched: PillarWithCount[] = (pillars as unknown as Pillar[]).map((p) => ({
+    ...p,
+    lessonCount: counts.get(p.id) ?? 0,
+  }));
+
+  return { data: enriched };
+}
+
+/**
+ * Fetch a single pillar by slug. Returns the pillar + lesson count.
+ * Used by 4C.2 (pillar lesson list page) to render the header.
+ */
+export async function getPillarBySlug(
+  slug: string
+): Promise<{ data?: PillarWithCount; error?: string }> {
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const supabase = auth.supabase;
+
+  const { data: pillar, error: pillarError } = await supabase
+    .from('pillars')
+    .select('*')
+    .eq('slug', slug)
+    .eq('is_active', true)
+    .single();
+
+  if (pillarError || !pillar) return { error: pillarError?.message || 'Pillar not found' };
+
+  const { count, error: countError } = await supabase
+    .from('lessons')
+    .select('id', { count: 'exact', head: true })
+    .eq('pillar_id', (pillar as Pillar).id)
+    .eq('is_published', true);
+
+  if (countError) return { error: countError.message };
+
+  return { data: { ...(pillar as Pillar), lessonCount: count ?? 0 } };
+}
+
+/**
+ * Fetch all published lessons for a pillar, ordered for display. Used
+ * by 4C.2 (pillar lesson list page). The lessons arrive WITHOUT their
+ * body_md to keep the list payload small; the reader (4C.3) fetches
+ * the full body separately.
+ */
+export async function getLessonsByPillar(
+  pillarId: string
+): Promise<{ data?: Omit<Lesson, 'body_md'>[]; error?: string }> {
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const supabase = auth.supabase;
+
+  const { data, error } = await supabase
+    .from('lessons')
+    .select(
+      'id, pillar_id, slug, title, audio_url, est_minutes, display_order, requires_data, is_published, created_at, updated_at'
+    )
+    .eq('pillar_id', pillarId)
+    .eq('is_published', true)
+    .order('display_order', { ascending: true });
+
+  if (error) return { error: error.message };
+  return { data: (data ?? []) as Omit<Lesson, 'body_md'>[] };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Main action: generatePersonalizedQuiz
+// ─────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────
 // Main action: generatePersonalizedQuiz

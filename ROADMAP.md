@@ -163,7 +163,7 @@ Operations & Scaling
 
 ## 4C — UI
 
-- [ ] **4C.1.** Route `/(pos)/learn/` — pillar grid home
+- [x] **4C.1.** Route `/(pos)/learn/` — pillar grid home
 - [ ] **4C.2.** Route `/(pos)/learn/[pillarSlug]/` — lesson list per pillar
 - [ ] **4C.3.** Route `/(pos)/learn/[pillarSlug]/[lessonSlug]/` — lesson reader
       with markdown render, optional audio player, "Apply to your business"
