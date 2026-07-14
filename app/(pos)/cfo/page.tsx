@@ -63,6 +63,8 @@ interface ChatMessage {
   error?: string;
   /** True if the engine hit MAX_ITERATIONS (assistant only). */
   hitIterationCap?: boolean;
+  /** True if the answer came from the 3C.3 fallback (engine was unreachable). */
+  fallback?: boolean;
 }
 
 interface SuggestionChip {
@@ -185,6 +187,7 @@ export default function CfoPage() {
             usage: data.usage,
             askedAt: data.askedAt,
             hitIterationCap: data.hitIterationCap,
+            fallback: data.fallback,
           },
         ]);
       }
@@ -367,6 +370,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       usage={message.usage}
       askedAt={message.askedAt}
       hitIterationCap={message.hitIterationCap ?? false}
+      fallback={message.fallback ?? false}
     />
   );
 }
@@ -442,6 +446,7 @@ interface CFOAnswerCardProps {
   usage?: AskCFOData['usage'];
   askedAt?: string;
   hitIterationCap: boolean;
+  fallback: boolean;
 }
 
 function CFOAnswerCard({
@@ -450,6 +455,7 @@ function CFOAnswerCard({
   usage,
   askedAt,
   hitIterationCap,
+  fallback,
 }: CFOAnswerCardProps) {
   const [showBasedOn, setShowBasedOn] = useState(false);
 
@@ -481,8 +487,17 @@ function CFOAnswerCard({
         </div>
 
         {/* Metadata strip: tool count, tokens, timestamp, iteration cap warning */}
-        {(toolCallCount > 0 || usage || askedAt || hitIterationCap) && (
+        {(toolCallCount > 0 || usage || askedAt || hitIterationCap || fallback) && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[10px] text-white/40">
+            {fallback && (
+              <span
+                className="text-tactical-orange font-bold flex items-center gap-1"
+                title="The AI was unreachable. This is a templated answer from a keyword-routed tool call (see 3C.3)."
+              >
+                <AlertCircle className="w-3 h-3" />
+                Fallback (AI unavailable)
+              </span>
+            )}
             {toolCallCount > 0 && (
               <button
                 onClick={() => setShowBasedOn((v) => !v)}

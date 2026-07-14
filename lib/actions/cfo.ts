@@ -23,6 +23,7 @@ import {
   type CfoRunResult,
 } from '@/lib/ai/cfo-engine';
 import type { CfoToolCallRecord } from '@/lib/ai/cfo-engine';
+import { buildFallbackAnswer } from '@/lib/actions/cfo-fallback';
 
 export interface AskCFOInput {
   question: string;
@@ -35,6 +36,8 @@ export interface AskCFOData {
   usage: CfoRunResult['usage'];
   iterations: number;
   hitIterationCap: boolean;
+  /** True when the engine was unreachable and a templated fallback ran. */
+  fallback: boolean;
   /** Echoed so the UI can show "Asked at HH:MM" without re-parsing. */
   askedAt: string;
 }
@@ -79,17 +82,32 @@ export async function askCFO(
   }
 
   // 4) Run the engine. If it throws (Groq down, network blip, schema
-  //    mismatch), the user gets a graceful error instead of a 500.
+  //    mismatch), fall back to a templated answer (3C.3) instead of
+  //    returning a hard error. The fallback uses simple keyword routing
+  //    to call the most likely tool directly.
   let result: CfoRunResult;
+  let fallbackUsed = false;
   try {
     result = await runCfoEngine(supabase, question, {
       history: input.history ?? [],
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.error('[askCFO] engine error:', msg);
-    return {
-      error: `I couldn't reach the AI right now (${msg}). Please try again in a moment.`,
+    console.warn('[askCFO] engine unavailable, running fallback:', msg);
+
+    // 4a) Try the keyword-routed fallback. If THAT also fails, return a
+    //     graceful error string. We still log to ai_usage + audit_log so
+    //     the user has a paper trail.
+    const fallback = await buildFallbackAnswer(supabase, question);
+    fallbackUsed = true;
+    // Synthesize a CfoRunResult shape so the rest of the function
+    // (logging, response shaping) doesn't have to branch.
+    result = {
+      answer: fallback.answer,
+      toolCalls: [],
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      iterations: 0,
+      hitIterationCap: false,
     };
   }
 
@@ -149,6 +167,7 @@ export async function askCFO(
       usage: result.usage,
       iterations: result.iterations,
       hitIterationCap: result.hitIterationCap,
+      fallback: fallbackUsed,
       askedAt: new Date().toISOString(),
     },
   };
