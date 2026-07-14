@@ -17,7 +17,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { getProductProfitability, type ProfitabilitySummary, type ProductProfitability, type MarginHealth } from '@/lib/actions/profitability';
-import { getDateRangeFromPreset, type DateRangePreset } from '@/lib/actions/accounting';
+import { getDateRangeFromPreset, type DateRangePreset } from '@/lib/actions/accounting-utils';
 import { formatCurrency, cn } from '@/lib/utils';
 
 const PRESETS: Array<{ key: DateRangePreset; label: string }> = [
@@ -470,7 +470,7 @@ function ProductRow({
               <div className="mt-3 p-2.5 rounded-lg bg-tactical-red/10 border border-tactical-red/30 flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 text-tactical-red shrink-0 mt-0.5" />
                 <p className="text-xs text-white/80">
-                  You're selling this below cost. Raise the price to at least {formatCurrency(product.cost_price)} to break even.
+                  You{'\''}re selling this below cost. Raise the price to at least {formatCurrency(product.cost_price)} to break even.
                 </p>
               </div>
             )}
@@ -490,6 +490,8 @@ function ProductRow({
 }
 
 function productHealthHighlight(h: MarginHealth): 'neon' | 'orange' | 'red' | 'gray' {
+  if (h === 'green')  return 'neon';
+  if (h === 'yellow') return 'orange';
   return h;
 }
 

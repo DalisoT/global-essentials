@@ -81,7 +81,7 @@ export async function getTrialBalance(range: DateRange): Promise<{
 
   const byAccount = new Map<string, TrialBalanceRow>();
   for (const entry of entries) {
-    for (const line of (entry.lines || []) as Array<{
+    for (const line of (entry.lines || []) as unknown as Array<{
       amount: number;
       entry_type: string;
       account: { id: string; code: string; name: string; type: string } | null;
@@ -161,7 +161,7 @@ export async function getPnL(range: DateRange): Promise<{ data?: PnLStatement; e
 
   const byAccount = new Map<string, PnLRow & { debit: number; credit: number }>();
   for (const entry of entries) {
-    for (const line of (entry.lines || []) as Array<{
+    for (const line of (entry.lines || []) as unknown as Array<{
       amount: number;
       entry_type: string;
       account: { id: string; code: string; name: string; type: string } | null;
@@ -250,7 +250,7 @@ export async function getBalanceSheet(asOf: string): Promise<{ data?: BalanceShe
 
   const byAccount = new Map<string, BalanceSheetRow & { debit: number; credit: number }>();
   for (const entry of entries) {
-    for (const line of (entry.lines || []) as Array<{
+    for (const line of (entry.lines || []) as unknown as Array<{
       amount: number;
       entry_type: string;
       account: { id: string; code: string; name: string; type: string } | null;
@@ -362,22 +362,24 @@ export async function getJournalEntries(range: DateRange, limit = 100): Promise<
   if (error) return { error: error.message };
   if (!data) return { data: [] };
 
+  type JournalEntryRaw = {
+    id: string;
+    entry_date: string;
+    description: string;
+    reference_type: string | null;
+    reference_id: string | null;
+    total_amount: number;
+    created_at: string;
+    lines: Array<{
+      entry_type: string;
+      amount: number;
+      memo: string | null;
+      account: { code: string; name: string } | null;
+    }>;
+  };
+
   return {
-    data: data.map((e: {
-      id: string;
-      entry_date: string;
-      description: string;
-      reference_type: string | null;
-      reference_id: string | null;
-      total_amount: number;
-      created_at: string;
-      lines: Array<{
-        entry_type: string;
-        amount: number;
-        memo: string | null;
-        account: { code: string; name: string } | null;
-      }>;
-    }) => ({
+    data: (data as unknown as JournalEntryRaw[]).map(e => ({
       id: e.id,
       entry_date: e.entry_date,
       description: e.description,

@@ -268,7 +268,7 @@ async function postJournalForSales(
     items: aggregated,
     upfrontPaid,
     totalAmount,
-    paymentMethod,
+    paymentMethod: payment_method,
     clientName: client?.full_name || 'Unknown client',
   });
 }

@@ -18,13 +18,11 @@ import {
   getPnL,
   getBalanceSheet,
   getJournalEntries,
-  getDateRangeFromPreset,
-  type DateRange,
-  type DateRangePreset,
   type PnLStatement,
   type BalanceSheet,
   type JournalListEntry,
 } from '@/lib/actions/accounting';
+import { getDateRangeFromPreset, type DateRange, type DateRangePreset } from '@/lib/actions/accounting-utils';
 import { formatCurrency, cn } from '@/lib/utils';
 
 // ─────────────────────────────────────────────────────────────

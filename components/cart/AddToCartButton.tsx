@@ -31,9 +31,7 @@ export function AddToCartButton({ product, quantity = 1, showQuantitySelector = 
     ? product.image_urls
     : product.image_url
       ? [product.image_url]
-      : product.images?.length
-        ? product.images
-        : [];
+      : [];
 
   const handleAdd = () => {
     if (!inStock) return;

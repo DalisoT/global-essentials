@@ -84,7 +84,7 @@ export async function getProductProfitability(
     .select('id, name, cost_price, selling_price, stock_level, image_url, deleted_at')
     .is('deleted_at', null);
   if (prodError) return { error: prodError.message };
-  const productList = (products || []) as Product[];
+  const productList = (products || []) as unknown as Product[];
 
   // 2) Fetch sales in the period with product info for revenue/cogs aggregation
   const { data: sales, error: salesError } = await supabase

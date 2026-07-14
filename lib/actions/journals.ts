@@ -60,7 +60,7 @@ export interface PostJournalParams {
 let _accountCache: Map<string, Account> | null = null;
 
 async function getAccountByCode(
-  supabase: Awaited<ReturnType<typeof requireAuth>>['supabase'],
+  supabase: NonNullable<Awaited<ReturnType<typeof requireAuth>>['supabase']>,
   code: string
 ): Promise<Account | null> {
   if (_accountCache && _accountCache.has(code)) return _accountCache.get(code)!;
