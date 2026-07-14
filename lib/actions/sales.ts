@@ -54,62 +54,7 @@ export async function createSale({
     }
   }
 
-  // Decrement stock FIRST — if this fails, nothing else happens
-  for (const item of items) {
-    const product = products.find((p) => p.id === item.product_id)!;
-    const { error: stockError } = await supabase
-      .from('products')
-      .update({ stock_level: product.stock_level - item.quantity })
-      .eq('id', item.product_id)
-      .eq('stock_level', product.stock_level); // optimistic lock — fails if stock changed
-
-    if (stockError) {
-      return { error: `Failed to reserve stock for ${product.name}. Please try again.` };
-    }
-  }
-
-  const paymentStatus = payment_method === 'cash' ? 'paid' : 'pending';
-  const createdSales: Array<{ id: string; total_amount: number }> = [];
-
-  interface AtomicSaleResult {
-    error?: string;
-    sales?: Array<{ id: string; total_amount: number }>;
-  }
-
-  // Try Supabase RPC for atomic transaction first
-  const { data: rpcResult, error: rpcError } = await supabase.rpc('atomic_create_sale', {
-    items_json: JSON.stringify(items),
-    client_id,
-    payment_method,
-    installment_duration: installment_duration ?? null,
-    installments_json: installments ? JSON.stringify(installments) : null,
-  }).single() as { data: AtomicSaleResult | null; error: unknown };
-
-  if (rpcError) {
-    // RPC not available or failed — fall back to optimistic-lock approach
-    // Stock was already decremented above — proceed with direct sales creation
-  }
-
-  if (rpcResult && rpcResult.error) {
-    // RPC returned an error — rollback stock that was decremented above
-    for (const item of items) {
-      const product = products.find((p) => p.id === item.product_id)!;
-      await supabase
-        .from('products')
-        .update({ stock_level: product.stock_level })
-        .eq('id', item.product_id);
-    }
-    return { error: rpcResult.error };
-  }
-
-  if (rpcResult && rpcResult.sales) {
-    return { data: rpcResult.sales, error: null };
-  }
-
-  // RPC not available — proceed with optimistic-lock approach below
-  // (stock already decremented — this is the fallback for when atomic_create_sale RPC doesn't exist)
-
-  // Validate custom installments before creating any sales
+  // Validate custom installments BEFORE we touch stock (F6: nothing decremented yet)
   if (installments && installments.length > 0) {
     if (installments.length < 2) {
       return { error: 'Custom plan must have at least 2 installments' };
@@ -141,8 +86,117 @@ export async function createSale({
     }
   }
 
-  // Create a sale for each line item
+  // Rollback helper: restores stock that was decremented in the loop below.
+  // Reads the *current* stock_level and adds item.quantity back — the previous
+  // implementation restored to the snapshot value, which was actually a
+  // double-decrement (Bug 2 from F6 audit).
+  async function rollbackStock(
+    itemsToRestore: Array<{ product_id: string; quantity: number }>
+  ): Promise<void> {
+    for (const item of itemsToRestore) {
+      const { data: current } = await supabase
+        .from('products')
+        .select('stock_level')
+        .eq('id', item.product_id)
+        .single();
+      const stockLevel = (current as { stock_level?: number } | null)?.stock_level ?? 0;
+      await supabase
+        .from('products')
+        .update({ stock_level: stockLevel + item.quantity })
+        .eq('id', item.product_id);
+    }
+  }
+
+  // Decrement stock FIRST — if this fails, nothing else has happened yet so no rollback needed
   for (const item of items) {
+    const product = products.find((p) => p.id === item.product_id)!;
+    const { error: stockError } = await supabase
+      .from('products')
+      .update({ stock_level: product.stock_level - item.quantity })
+      .eq('id', item.product_id)
+      .eq('stock_level', product.stock_level); // optimistic lock — fails if stock changed
+
+    if (stockError) {
+      // Roll back any items we already decremented before this one failed
+      const completed = items.slice(0, items.indexOf(item));
+      if (completed.length > 0) await rollbackStock(completed);
+      return { error: `Failed to reserve stock for ${product.name}. Please try again.` };
+    }
+  }
+
+  const paymentStatus = payment_method === 'cash' ? 'paid' : 'pending';
+  const createdSales: Array<{ id: string; total_amount: number }> = [];
+
+  interface AtomicSaleResult {
+    error?: string;
+    sales?: Array<{ id: string; total_amount: number }>;
+  }
+
+  // Try Supabase RPC for atomic transaction first
+  const { data: rpcResult, error: rpcError } = await supabase.rpc('atomic_create_sale', {
+    items_json: JSON.stringify(items),
+    client_id,
+    payment_method,
+    installment_duration: installment_duration ?? null,
+    installments_json: installments ? JSON.stringify(installments) : null,
+  }).single() as { data: AtomicSaleResult | null; error: unknown };
+
+  // Distinguish "RPC doesn't exist on this deployment" (fall through to manual path)
+  // from "RPC exists but errored" (rollback + abort).
+  // PostgREST returns code 'PGRST116' / '42883' for missing function; 'PGRST202'
+  // wraps the underlying SQLSTATE. We treat anything that mentions the function
+  // not existing as a silent fallback signal.
+  const isRpcMissing =
+    rpcError &&
+    typeof rpcError === 'object' &&
+    (() => {
+      const e = rpcError as { code?: string; message?: string };
+      const codeMissing = e.code === 'PGRST116' || e.code === '42883' || e.code === 'PGRST202';
+      const msgMissing = typeof e.message === 'string' && /function.*does not exist/i.test(e.message);
+      return codeMissing || msgMissing;
+    })();
+
+  if (rpcError && !isRpcMissing) {
+    // RPC exists but failed — rollback stock and abort.
+    await rollbackStock(items);
+    const e = rpcError as { message?: string };
+    return { error: e.message || 'Atomic create sale failed' };
+  }
+
+  if (rpcResult && rpcResult.error) {
+    // RPC returned a structured error — rollback and abort.
+    await rollbackStock(items);
+    return { error: rpcResult.error };
+  }
+
+  if (rpcResult && rpcResult.sales) {
+    return { data: rpcResult.sales, error: null };
+  }
+
+  // RPC not available — proceed with optimistic-lock approach below
+  // (stock already decremented — this is the fallback for when atomic_create_sale RPC doesn't exist)
+
+  // F6 rollback helper for the manual insert path:
+  // On failure partway through, delete any sale rows we already inserted AND
+  // restore stock for items we hadn't reached yet. This keeps the function
+  // "all-or-nothing" from the caller's perspective.
+  async function rollbackPartialInsert(
+    insertedSaleIds: string[],
+    remainingItems: Array<{ product_id: string; quantity: number }>
+  ): Promise<void> {
+    if (insertedSaleIds.length > 0) {
+      // Delete installments first to satisfy any FK (and avoid orphans)
+      await supabase.from('installments').delete().in('sale_id', insertedSaleIds);
+      await supabase.from('sales').delete().in('id', insertedSaleIds);
+    }
+    if (remainingItems.length > 0) {
+      await rollbackStock(remainingItems);
+    }
+  }
+
+  // Create a sale for each line item
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
     const product = products.find((p) => p.id === item.product_id)!;
     const totalAmount = product.selling_price * item.quantity;
 
@@ -159,8 +213,13 @@ export async function createSale({
       .select()
       .single();
 
-    if (saleError) return { error: saleError.message };
-    if (!sale) return { error: 'Failed to create sale' };
+    if (saleError || !sale) {
+      // Roll back: delete sales we already inserted + restore stock for items not yet processed.
+      const insertedIds = createdSales.map((s) => s.id);
+      const remaining = items.slice(i);
+      await rollbackPartialInsert(insertedIds, remaining);
+      return { error: saleError?.message || 'Failed to create sale' };
+    }
 
     createdSales.push({ id: sale.id, total_amount: totalAmount });
 
@@ -181,7 +240,12 @@ export async function createSale({
           };
         });
         const { error } = await supabase.from('installments').insert(processed);
-        if (error) return { error: error.message };
+        if (error) {
+          const insertedIds = createdSales.map((s) => s.id);
+          const remaining = items.slice(i + 1);
+          await rollbackPartialInsert(insertedIds, remaining);
+          return { error: error.message };
+        }
       } else if (installment_duration) {
         const duration = installment_duration;
         const upfront = Math.ceil(totalAmount / duration);
@@ -207,7 +271,12 @@ export async function createSale({
           });
         }
         const { error } = await supabase.from('installments').insert(presetInstallments);
-        if (error) return { error: error.message };
+        if (error) {
+          const insertedIds = createdSales.map((s) => s.id);
+          const remaining = items.slice(i + 1);
+          await rollbackPartialInsert(insertedIds, remaining);
+          return { error: error.message };
+        }
       }
     }
 

@@ -47,7 +47,7 @@
       use `sales.quantity` instead of counting rows
 - [x] **F5.** Rewrite `recordInstallmentPayment` as a single UPDATE (drop the
       chained `.then()` blocks that warn about missing columns)
-- [ ] **F6.** Fix `createSale` RPC fallback path — ensure stock is restored if the
+- [x] **F6.** Fix `createSale` RPC fallback path — ensure stock is restored if the
       RPC call returns an error after stock decrement
 - [ ] **F7.** Rotate the Supabase anon key in `.env.local.example` (replace with
       a placeholder, document in README)
