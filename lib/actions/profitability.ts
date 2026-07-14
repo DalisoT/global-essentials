@@ -89,21 +89,19 @@ export async function getProductProfitability(
   // 2) Fetch sales in the period with product info for revenue/cogs aggregation
   const { data: sales, error: salesError } = await supabase
     .from('sales')
-    .select('product_id, total_amount, created_at')
+    .select('product_id, total_amount, quantity, created_at')
     .gte('created_at', `${range.from}T00:00:00`)
     .lte('created_at', `${range.to}T23:59:59`);
   if (salesError) return { error: salesError.message };
 
-  // Aggregate units + revenue per product. (The `sales` table doesn't store qty,
-  // so we infer units from sales count = quantity 1 each. For multi-quantity
-  // sales the journal engine already accounts per-unit cost; for the top-line
-  // view, treating each sale row as 1 unit is a fair approximation when most
-  // sales are single-item. For true accuracy, count via a `quantity` field if
-  // it exists — currently sales has no qty column, only total_amount.)
+  // Aggregate units + revenue per product. The `quantity` column on `sales`
+  // was added by add_sales_quantity.sql; pre-migration rows default to 1, so
+  // this remains backward-compatible if a row somehow lacks it.
   const aggByProduct = new Map<string, { units: number; revenue: number }>();
-  for (const sale of (sales || []) as Array<{ product_id: string; total_amount: number }>) {
+  for (const sale of (sales || []) as Array<{ product_id: string; total_amount: number; quantity?: number }>) {
+    const qty = Number(sale.quantity) || 1;
     const cur = aggByProduct.get(sale.product_id) || { units: 0, revenue: 0 };
-    cur.units += 1;
+    cur.units += qty;
     cur.revenue += Number(sale.total_amount) || 0;
     aggByProduct.set(sale.product_id, cur);
   }

@@ -152,6 +152,7 @@ export async function createSale({
         product_id: item.product_id,
         client_id,
         total_amount: totalAmount,
+        quantity: item.quantity,
         payment_status: paymentStatus,
         payment_method,
       }])
@@ -352,11 +353,12 @@ export async function deleteSale(saleId: string): Promise<{ error?: string }> {
   // Delete associated installments
   await supabase.from('installments').delete().eq('sale_id', saleId);
 
-  // Restore product stock
+  // Restore product stock by the quantity that was sold (defaults to 1 if missing)
   if (sale.product) {
+    const qty = (sale as { quantity?: number }).quantity ?? 1;
     await supabase
       .from('products')
-      .update({ stock_level: sale.product.stock_level + 1 })
+      .update({ stock_level: sale.product.stock_level + qty })
       .eq('id', sale.product_id);
   }
 

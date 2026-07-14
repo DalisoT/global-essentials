@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import { getDashboardStats } from '@/lib/actions/dashboard';
+import { getDailyInsights } from '@/lib/actions/insights';
+import DailyInsightsWidget from './DailyInsights';
 import { formatCurrency } from '@/lib/utils';
 import {
   TrendingUp,
@@ -14,8 +16,12 @@ type SaleWithProductAndClient = Sale & { product?: Product; client?: Client };
 type InstallmentWithSaleAndClient = Installment & { sale?: Sale & { client?: Client } };
 
 export default async function DashboardPage() {
-  const result = await getDashboardStats();
-  const stats = result.data;
+  const [statsResult, insightsResult] = await Promise.all([
+    getDashboardStats(),
+    getDailyInsights(),
+  ]);
+  const stats = statsResult.data;
+  const initialInsights = insightsResult.data;
 
   if (!stats) {
     return (
@@ -117,6 +123,9 @@ export default async function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* Daily AI Insights (QW.1) */}
+      <DailyInsightsWidget initial={initialInsights} />
 
       {/* Recent Sales */}
       <div className="space-y-3">

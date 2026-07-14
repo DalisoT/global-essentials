@@ -26,6 +26,8 @@ export interface Sale {
   product_id: string;
   client_id: string;
   total_amount: number;
+  /** Units of `product_id` sold in this row. Defaults to 1. */
+  quantity: number;
   payment_status: 'paid' | 'pending';
   payment_method: 'cash' | 'pay-slow';
   created_at: string;
