@@ -51,7 +51,7 @@
       RPC call returns an error after stock decrement
 - [ ] **F7.** Rotate the Supabase anon key in `.env.local.example` (replace with
       a placeholder, document in README)
-- [ ] **F8.** Add CHECK constraint migration: `installments.amount_paid <= amount_due`
+- [x] **F8.** Add CHECK constraint migration: `installments.amount_paid <= amount_due`
 - [ ] **F9.** Add CHECK constraint migration: `sales.quantity > 0`
 - [ ] **F10.** Add `audit_log` viewer page at `/(pos)/audit/` (admin/owner only)
 - [ ] **F11.** Remove unused `appwrite/` folder + drop `appwrite` from
