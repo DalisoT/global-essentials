@@ -48,12 +48,18 @@ pnpm install
 cp .env.local.example .env.local
 ```
 
-Edit `.env.local`:
+Edit `.env.local` with your own values:
 ```
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-GROQ_API_KEY=your-groq-api-key
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
+GROQ_API_KEY=your_groq_api_key_here
 ```
+
+> **Note:** A real Supabase anon key was previously committed in
+> `.env.local.example`. It has been replaced with a placeholder — if you
+> cloned this repo before the F7 fix, **rotate the anon key in your
+> Supabase dashboard** (Settings → API → "Roll anon key") and update your
+> local `.env.local`. The old key will be invalidated on rotation.
 
 ### 3. Supabase Setup
 

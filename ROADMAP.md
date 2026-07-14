@@ -49,7 +49,7 @@
       chained `.then()` blocks that warn about missing columns)
 - [x] **F6.** Fix `createSale` RPC fallback path — ensure stock is restored if the
       RPC call returns an error after stock decrement
-- [ ] **F7.** Rotate the Supabase anon key in `.env.local.example` (replace with
+- [x] **F7.** Rotate the Supabase anon key in `.env.local.example` (replace with
       a placeholder, document in README)
 - [x] **F8.** Add CHECK constraint migration: `installments.amount_paid <= amount_due`
 - [ ] **F9.** Add CHECK constraint migration: `sales.quantity > 0`
