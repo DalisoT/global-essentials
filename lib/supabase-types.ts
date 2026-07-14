@@ -81,6 +81,24 @@ export interface AuditLogWithActor extends AuditLog {
   } | null;
 }
 
+// ─────────────────────────────────────────────
+// AI USAGE
+// ─────────────────────────────────────────────
+
+/** One row per AI call. See ROADMAP.md#3A.4. */
+export interface AiUsage {
+  id: string;
+  /** Null for background / system calls. */
+  user_id: string | null;
+  /** Free-form feature tag, e.g. 'cfo' | 'analytics' | 'reminder' | 'advisor'. */
+  route: string;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  total_tokens: number | null;
+  model: string | null;
+  created_at: string;
+}
+
 export interface DashboardStats {
   groundTruth: number;
   inPipeline: number;

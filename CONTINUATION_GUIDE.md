@@ -39,6 +39,7 @@ Run `supabase-schema.sql` (creates tables: products, clients, sales, installment
 supabase/migrations/add_installment_amount_paid.sql
 supabase/migrations/add_rls_policies_and_indexes.sql
 supabase/migrations/full_shipping_rates_may2026.sql  (TODAY CARGO rates)
+supabase/migrations/add_ai_usage.sql  (Phase 3 — AI cost tracking)
 ```
 
 3. Create storage bucket:
@@ -55,6 +56,7 @@ supabase/migrations/full_shipping_rates_may2026.sql  (TODAY CARGO rates)
 | `add_installment_amount_paid.sql` | Adds `amount_paid` and `note` columns to `installments` |
 | `add_rls_policies_and_indexes.sql` | RLS policies for all tables, performance indexes, `UNIQUE` on `clients.phone_number` |
 | `full_shipping_rates_may2026.sql` | TODAY CARGO shipping rates (air + sea) |
+| `add_ai_usage.sql` | `ai_usage` table for AI call cost tracking (Phase 3) |
 
 ### Database Schema
 
