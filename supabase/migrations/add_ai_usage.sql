@@ -11,10 +11,15 @@
 -- always return usage, and we want to record the call even when the
 -- token count is missing.
 --
+-- Idempotent: safe to re-run. CREATE TABLE/INDEX use IF NOT EXISTS, and
+-- the RLS policies are dropped-then-created so a partial earlier run
+-- (which is exactly how this file got a typo in its first incarnation)
+-- can be cleanly recovered.
+--
 -- Reversible:
 --   DROP TABLE IF EXISTS ai_usage;
 
-CREATE TABLE ai_usage (
+CREATE TABLE IF NOT EXISTS ai_usage (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES profiles(id),
   -- 'cfo' | 'analytics' | 'reminder' | 'advisor' | 'insights' | etc.
@@ -29,18 +34,24 @@ CREATE TABLE ai_usage (
 
 -- Primary access pattern: "how much has <user> spent on the CFO this week".
 -- Composite index covers user-scoped time-range scans.
-CREATE INDEX idx_ai_usage_user_created
+CREATE INDEX IF NOT EXISTS idx_ai_usage_user_created
   ON ai_usage(user_id, created_at DESC);
 
 -- Secondary access pattern: "how much did the CFO route cost last month".
 -- Lets us report per-feature usage without scanning the whole table.
-CREATE INDEX idx_ai_usage_route_created
+CREATE INDEX IF NOT EXISTS idx_ai_usage_route_created
   ON ai_usage(route, created_at DESC);
 
 -- RLS: anyone authenticated can insert their own usage row; reads
 -- restricted to the row owner (and admins via a separate policy when
 -- the audit-log viewer is extended to cover ai_usage in Phase 6).
 ALTER TABLE ai_usage ENABLE ROW LEVEL SECURITY;
+
+-- Drop-then-create so this migration is safe to re-run after a partial
+-- earlier run. (Previous version had a typo in the policy name, which
+-- caused the first run to leave the policies in an inconsistent state.)
+DROP POLICY IF EXISTS "Users can insert their own ai_usage" ON ai_usage;
+DROP POLICY IF EXISTS "Users can view their own ai_usage" ON ai_usage;
 
 CREATE POLICY "Users can insert their own ai_usage" ON ai_usage
   FOR INSERT TO authenticated
