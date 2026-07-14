@@ -74,7 +74,7 @@
 - [x] **3A.2.** Create `lib/ai/tools.ts` — declare Groq function-calling tool
       schemas: `getPnL`, `getTrialBalance`, `getTopProducts`,
       `getAgingDebts`, `getCashPosition`, `getSlowMovingStock`
-- [ ] **3A.3.** Create `lib/ai/cfo-engine.ts` — function-calling loop that lets
+- [x] **3A.3.** Create `lib/ai/cfo-engine.ts` — function-calling loop that lets
       the model call the tools and synthesize a final answer
 - [ ] **3A.4.** Add `ai_usage` table migration (user_id, route, prompt_tokens,
       completion_tokens, model, created_at) for cost tracking
