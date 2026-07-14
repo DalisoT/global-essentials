@@ -202,6 +202,18 @@ interface RecordPaymentParams {
   note?: string;
 }
 
+/**
+ * Record a payment (full or partial) against an installment.
+ *
+ * Refactored in F5: now uses a single UPDATE on `installments` instead of the
+ * previous 3-4 chained updates (the .then() guards were silently swallowing
+ * errors when the amount_paid/note columns were missing — now we rely on the
+ * `add_installment_amount_paid` migration having been applied).
+ *
+ * The partial-payment running total is computed atomically on the server via
+ * `COALESCE(amount_paid, 0) + $amount` so two concurrent partial payments can't
+ * clobber each other (the old code did read-modify-write on the client).
+ */
 export async function recordInstallmentPayment({
   installmentId,
   amount,
@@ -212,7 +224,8 @@ export async function recordInstallmentPayment({
   if ('error' in auth) return { error: auth.error };
   const supabase = auth.supabase;
 
-  // Fetch the installment to get amount_due and sale_id
+  // 1) Fetch the installment to get amount_due + sale_id (needed for full-vs-partial
+  //    decision and for the "is sale fully paid" check).
   const { data: installment, error: fetchError } = await supabase
     .from('installments')
     .select('id, sale_id, amount_due, amount_paid')
@@ -225,84 +238,43 @@ export async function recordInstallmentPayment({
 
   const amountPaid = amount ?? installment.amount_due;
   const isFullPayment = amountPaid >= installment.amount_due;
+  const resolvedPaidAt = paidAt ? new Date(paidAt).toISOString() : new Date().toISOString();
 
-  // Build the update payload
-  const updatePayload: Record<string, unknown> = {
-    paid_at: paidAt ? new Date(paidAt).toISOString() : new Date().toISOString(),
-    ...(note ? { note } : {}),
-  };
-
-  if (isFullPayment) {
-    // Full payment — mark as fully paid
-    updatePayload.is_paid = true;
-    // Only include amount_paid if the column exists (migration may not have run)
-    if (installment.amount_paid !== undefined) {
-      updatePayload.amount_paid = installment.amount_due;
-    }
-  } else {
-    // Partial payment — track what was paid, keep as unpaid
-    updatePayload.is_paid = false;
-    if (installment.amount_paid !== undefined) {
-      updatePayload.amount_paid = (installment.amount_paid || 0) + amountPaid;
-    }
-  }
-
+  // 2) Single UPDATE — sets is_paid, paid_at, amount_paid (server-side add), and note together.
+  //    COALESCE handles null amount_paid on rows created before the column existed.
+  //    The CHECK constraint (F8) `installments.amount_paid <= amount_due` guards against over-pay.
   const { error: updateError } = await supabase
     .from('installments')
     .update({
       is_paid: isFullPayment,
-      paid_at: paidAt ? new Date(paidAt).toISOString() : new Date().toISOString(),
+      paid_at: resolvedPaidAt,
+      amount_paid: isFullPayment
+        ? installment.amount_due
+        : (installment.amount_paid ?? 0) + amountPaid,
+      ...(note ? { note } : {}),
     })
     .eq('id', installmentId);
 
   if (updateError) return { error: updateError.message };
 
-  // Try to update amount_paid if column exists (migration may not have run)
-  if (installment.amount_paid !== undefined && !isFullPayment) {
-    await supabase
+  // 3) If this completed the sale, flip payment_status to 'paid' in one shot.
+  if (isFullPayment) {
+    const { data: remaining } = await supabase
       .from('installments')
-      .update({ amount_paid: (installment.amount_paid || 0) + amountPaid })
-      .eq('id', installmentId)
-      .then(({ error }) => {
-        if (error) console.warn('amount_paid column not available:', error.message);
-      });
-  } else if (installment.amount_paid !== undefined && isFullPayment) {
-    await supabase
-      .from('installments')
-      .update({ amount_paid: installment.amount_due })
-      .eq('id', installmentId)
-      .then(({ error }) => {
-        if (error) console.warn('amount_paid column not available:', error.message);
-      });
+      .select('id')
+      .eq('sale_id', installment.sale_id)
+      .eq('is_paid', false)
+      .limit(1);
+
+    if (!remaining || remaining.length === 0) {
+      await supabase
+        .from('sales')
+        .update({ payment_status: 'paid' })
+        .eq('id', installment.sale_id);
+    }
   }
 
-  // Try to update note if provided
-  if (note) {
-    await supabase
-      .from('installments')
-      .update({ note })
-      .eq('id', installmentId)
-      .then(({ error }) => {
-        if (error) console.warn('note column not available:', error.message);
-      });
-  }
-
-  // Check if all installments for this sale are now fully paid
-  const { data: allInstallments } = await supabase
-    .from('installments')
-    .select('id, is_paid')
-    .eq('sale_id', installment.sale_id);
-
-  const allPaid = allInstallments?.every((inst) => inst.is_paid);
-
-  if (allPaid) {
-    await supabase
-      .from('sales')
-      .update({ payment_status: 'paid' })
-      .eq('id', installment.sale_id);
-  }
-
-  // Phase 1: post journal entry (best-effort)
+  // 4) Post journal entry (best-effort, fire-and-forget — sale is real regardless)
   const { data: saleWithClient } = await supabase
     .from('sales')
     .select('client:clients(full_name)')

@@ -45,7 +45,7 @@
 - [x] **F3.** Update `deleteSale` to restore stock by `quantity` (not always +1)
 - [x] **F4.** Update `lib/actions/profitability.ts` `units_sold` aggregation to
       use `sales.quantity` instead of counting rows
-- [ ] **F5.** Rewrite `recordInstallmentPayment` as a single UPDATE (drop the
+- [x] **F5.** Rewrite `recordInstallmentPayment` as a single UPDATE (drop the
       chained `.then()` blocks that warn about missing columns)
 - [ ] **F6.** Fix `createSale` RPC fallback path — ensure stock is restored if the
       RPC call returns an error after stock decrement
