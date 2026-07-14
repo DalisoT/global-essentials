@@ -4,7 +4,8 @@
       "Bash(npx tsc:*)",
       "Bash(./node_modules/.bin/tsc:*)",
       "Bash(pnpm install)",
-      "Bash(pnpm build:*)"
+      "Bash(pnpm build:*)",
+      "Bash(git update-index:*)"
     ],
     "deny": [],
     "ask": []
