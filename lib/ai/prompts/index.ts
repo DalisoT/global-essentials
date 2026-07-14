@@ -20,3 +20,4 @@ export * as profitabilityAdvisor from './profitability-advisor';
 export * as demandAdjustment from './demand-adjustment';
 export * as analytics from './analytics';
 export * as dailyInsights from './daily-insights';
+export * as cfoSystem from './cfo-system';
