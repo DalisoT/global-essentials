@@ -56,7 +56,7 @@
 - [ ] **F10.** Add `audit_log` viewer page at `/(pos)/audit/` (admin/owner only)
 - [x] **F11.** Remove unused `appwrite/` folder + drop `appwrite` from
       `package.json` (dead dependency from earlier backend swap)
-- [ ] **F12.** Add DB index migration on `journal_entries(entry_date, reference_type)`
+- [x] **F12.** Add DB index migration on `journal_entries(entry_date, reference_type)`
       for Phase 3 CFO queries
 
 ---
