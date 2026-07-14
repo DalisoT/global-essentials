@@ -91,10 +91,10 @@
       30 days?")
 - [x] **3B.3.** Build `<CFOAnswerCard>` — renders AI text + a small "based on"
       disclosure showing which tool calls were used + the numbers
-- [ ] **3B.4.** Add "AI" entry to POS drawer + bottom nav (replace nothing,
+- [x] **3B.4.** Add "AI" entry to POS drawer + bottom nav (replace nothing,
       add as 6th item only on wide screens, or surface from dashboard widget
       on mobile)
-- [ ] **3B.5.** Add "Ask CFO" button on dashboard metric widgets — context-aware
+- [x] **3B.5.** Add "Ask CFO" button on dashboard metric widgets — context-aware
       prefill ("Tell me more about Ground Truth")
 
 ## 3C — Quality
