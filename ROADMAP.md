@@ -99,7 +99,7 @@
 
 ## 3C — Quality
 
-- [ ] **3C.1.** Add 10 hand-crafted test questions to a `cfo-evals` file with
+- [x] **3C.1.** Add 10 hand-crafted test questions to a `cfo-evals` file with
       expected answer shape (golden set)
 - [ ] **3C.2.** Add rate limiting: max 30 questions/user/day (configurable in
       `lib/config.ts`)
