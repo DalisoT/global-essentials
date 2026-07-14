@@ -39,11 +39,11 @@
 > anon key is committed to the repo. These bite us the moment AI starts to trust
 > the numbers.
 
-- [ ] **F1.** Add `quantity INTEGER NOT NULL DEFAULT 1` column to `sales` table
+- [x] **F1.** Add `quantity INTEGER NOT NULL DEFAULT 1` column to `sales` table
       + migration `supabase/migrations/add_sales_quantity.sql`
-- [ ] **F2.** Update `createSale` to write `quantity` for each sale row
-- [ ] **F3.** Update `deleteSale` to restore stock by `quantity` (not always +1)
-- [ ] **F4.** Update `lib/actions/profitability.ts` `units_sold` aggregation to
+- [x] **F2.** Update `createSale` to write `quantity` for each sale row
+- [x] **F3.** Update `deleteSale` to restore stock by `quantity` (not always +1)
+- [x] **F4.** Update `lib/actions/profitability.ts` `units_sold` aggregation to
       use `sales.quantity` instead of counting rows
 - [ ] **F5.** Rewrite `recordInstallmentPayment` as a single UPDATE (drop the
       chained `.then()` blocks that warn about missing columns)
