@@ -40,6 +40,8 @@ supabase/migrations/add_installment_amount_paid.sql
 supabase/migrations/add_rls_policies_and_indexes.sql
 supabase/migrations/full_shipping_rates_may2026.sql  (TODAY CARGO rates)
 supabase/migrations/add_ai_usage.sql  (Phase 3 — AI cost tracking)
+supabase/migrations/add_learning_academy.sql  (Phase 4 — schema)
+supabase/migrations/seed_learning_academy.sql  (Phase 4 — 4 pillars + 12 lessons)
 ```
 
 3. Create storage bucket:
@@ -57,6 +59,8 @@ supabase/migrations/add_ai_usage.sql  (Phase 3 — AI cost tracking)
 | `add_rls_policies_and_indexes.sql` | RLS policies for all tables, performance indexes, `UNIQUE` on `clients.phone_number` |
 | `full_shipping_rates_may2026.sql` | TODAY CARGO shipping rates (air + sea) |
 | `add_ai_usage.sql` | `ai_usage` table for AI call cost tracking (Phase 3) |
+| `add_learning_academy.sql` | `pillars`, `lessons`, `user_lesson_progress`, `lesson_resources` tables (Phase 4) |
+| `seed_learning_academy.sql` | 4 pillars + 12 lessons seeded with real content (Phase 4) |
 
 ### Database Schema
 

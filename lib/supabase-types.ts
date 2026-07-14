@@ -99,6 +99,75 @@ export interface AiUsage {
   created_at: string;
 }
 
+// ─────────────────────────────────────────────
+// LEARNING ACADEMY (Phase 4)
+// ─────────────────────────────────────────────
+
+/** A category of lessons. e.g. 'Financial Literacy', 'Diversification'. */
+export interface Pillar {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  /** Lucide icon name. The UI does a dynamic import. */
+  icon: string | null;
+  /** Tailwind color token, e.g. 'tactical-blue'. */
+  color: string | null;
+  display_order: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+/** A single lesson. body_md is rendered with a small markdown renderer. */
+export interface Lesson {
+  id: string;
+  pillar_id: string;
+  slug: string;
+  title: string;
+  body_md: string;
+  audio_url: string | null;
+  est_minutes: number;
+  display_order: number;
+  /** Which data sources the lesson "needs" to be most useful. */
+  requires_data: string[];
+  is_published: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Per-user progress on a single lesson. UNIQUE(user_id, lesson_id). */
+export interface UserLessonProgress {
+  id: string;
+  user_id: string;
+  lesson_id: string;
+  started_at: string;
+  completed_at: string | null;
+  /** 0-100. NULL = quiz not yet taken. */
+  quiz_score: number | null;
+  scroll_depth_pct: number;
+  read_seconds: number;
+  bookmarked: boolean;
+  last_seen_at: string;
+}
+
+/** Link from a lesson to an internal route, external URL, or app action. */
+export interface LessonResource {
+  id: string;
+  lesson_id: string;
+  label: string;
+  /** Route, URL, or app:// scheme. */
+  href: string;
+  /** 'internal' | 'external' | 'action'. */
+  kind: string;
+  display_order: number;
+}
+
+/** Lesson joined with its progress for the current user (or null if untouched). */
+export interface LessonWithProgress extends Lesson {
+  progress: UserLessonProgress | null;
+  pillar: Pick<Pillar, 'id' | 'slug' | 'name' | 'color'>;
+}
+
 export interface DashboardStats {
   groundTruth: number;
   inPipeline: number;
