@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import groq from '@/lib/groq';
+import { analytics } from '@/lib/ai/prompts';
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,33 +11,18 @@ export async function POST(request: NextRequest) {
     }
 
     const messages = [
-      {
-        role: 'system' as const,
-        content: `You are a business intelligence analyst for "Global Essentials", a POS and debt management system.
-Answer questions about the business data provided. Be concise, insightful, and actionable.
-Format your response nicely with bullet points or sections when appropriate.
-Keep responses under 300 words.`,
-      },
+      { role: 'system' as const, content: analytics.system },
       {
         role: 'user' as const,
-        content: `Business Data:
-- Total Revenue: $${data.totalRevenue.toFixed(2)}
-- Total Expenses: $${data.totalExpenses.toFixed(2)}
-- Net Profit: $${data.netProfit.toFixed(2)}
-- Ground Truth (Paid Sales - Expenses): $${data.groundTruth.toFixed(2)}
-- In Pipeline (Unpaid Installments): $${data.inPipeline.toFixed(2)}
-- Top Products: ${data.topProducts.map((p: any) => `${p.name} (${p.count} sold, $${p.revenue.toFixed(2)} revenue)`).join(', ') || 'None yet'}
-- Last 7 Days Revenue: ${data.revenueByDay.map((d: any) => `${d.date}: $${d.amount.toFixed(2)}`).join(', ') || 'No data'}
-
-Question: ${query}`,
+        content: analytics.buildUserMessage({ query, data }),
       },
     ];
 
     const response = await groq.chat.completions.create({
       messages: messages as any,
-      model: 'llama-3.3-70b-versatile',
-      temperature: 0.5,
-      max_tokens: 1024,
+      model: analytics.meta.model,
+      temperature: analytics.meta.temperature,
+      max_tokens: analytics.meta.maxTokens,
     });
 
     const aiResponse = response.choices[0]?.message?.content?.trim();

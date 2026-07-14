@@ -2,6 +2,7 @@
 
 import groq from '@/lib/groq';
 import { formatCurrency, formatDateShort } from '@/lib/utils';
+import { paymentReminder, paymentRisk } from '@/lib/ai/prompts';
 
 interface ReminderContext {
   clientName: string;
@@ -15,34 +16,24 @@ export async function generatePaymentReminder(context: ReminderContext): Promise
   const { clientName, amount, dueDate, productName, paymentHistory } = context;
 
   const messages = [
-    {
-      role: 'system' as const,
-      content: `You are a professional debt collection assistant for a business called "Global Essentials".
-Generate a polite, firm but friendly payment reminder message.
-The message should:
-- Be concise (under 300 characters)
-- Include the amount due and due date
-- Mention the product name if provided
-- Be professional but warm in tone
-- Not include any placeholders - use the actual values provided
-- End with "- Global Essentials"
-Do NOT use emojis.`,
-    },
+    { role: 'system' as const, content: paymentReminder.system },
     {
       role: 'user' as const,
-      content: `Generate a payment reminder for ${clientName}.
-Amount: ${formatCurrency(amount)}
-Due Date: ${formatDateShort(dueDate)}
-Product: ${productName || 'your purchase'}
-Payment History: ${paymentHistory || 'this is a new customer'}`,
+      content: paymentReminder.buildUserMessage({
+        clientName,
+        amount: formatCurrency(amount),
+        dueDate: formatDateShort(dueDate),
+        productName,
+        paymentHistory,
+      }),
     },
   ];
 
   const response = await groq.chat.completions.create({
     messages: messages as any,
-    model: 'llama-3.3-70b-versatile',
-    temperature: 0.7,
-    max_tokens: 256,
+    model: paymentReminder.meta.model,
+    temperature: paymentReminder.meta.temperature,
+    max_tokens: paymentReminder.meta.maxTokens,
   });
 
   return response.choices[0]?.message?.content?.trim() ||
@@ -61,29 +52,24 @@ export async function analyzePaymentRisk(
   recommendation: string;
 }> {
   const messages = [
-    {
-      role: 'system' as const,
-      content: `You are a credit risk analyst. Analyze the payment history and provide a risk assessment.
-Return a JSON object with:
-- risk: "low", "medium", or "high"
-- message: A brief explanation (1 sentence)
-- recommendation: One actionable suggestion (1 sentence)`,
-    },
+    { role: 'system' as const, content: paymentRisk.system },
     {
       role: 'user' as const,
-      content: `Analyze payment risk for ${clientName}:
-- Total outstanding debt: ${formatCurrency(totalDebt)}
-- Number of overdue installments: ${overdueCount}
-- On-time payments: ${onTimePayments}
-- Late payments: ${latePayments}`,
+      content: paymentRisk.buildUserMessage({
+        clientName,
+        totalDebt: formatCurrency(totalDebt),
+        overdueCount,
+        onTimePayments,
+        latePayments,
+      }),
     },
   ];
 
   const response = await groq.chat.completions.create({
     messages: messages as any,
-    model: 'llama-3.3-70b-versatile',
-    temperature: 0.3,
-    max_tokens: 256,
+    model: paymentRisk.meta.model,
+    temperature: paymentRisk.meta.temperature,
+    max_tokens: paymentRisk.meta.maxTokens,
   });
 
   try {

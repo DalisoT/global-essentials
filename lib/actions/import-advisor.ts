@@ -15,6 +15,11 @@ import type {
 } from '@/lib/import/advisor-types';
 import { calculateBreakEvenQuantity } from '@/lib/import/import-advisor-calc';
 import groq from '@/lib/groq';
+import {
+  shippingRecommender,
+  profitabilityAdvisor,
+  demandAdjustment,
+} from '@/lib/ai/prompts';
 
 // ─────────────────────────────────────────────
 // FEATURE 1: SHIPPING METHOD RECOMMENDER
@@ -77,26 +82,36 @@ export async function getShippingRecommendation(
   const messages = [
     {
       role: 'system' as const,
-      content: `You are a shipping logistics advisor. Return a JSON object with:
-- summary: 2-3 sentence natural language recommendation for the best shipping method(s) with reasoning. No emojis.`,
+      content: shippingRecommender.system,
     },
     {
       role: 'user' as const,
-      content: `Shipping methods for product: unit cost $${input.unitCostUSD}, qty ${input.quantity}, selling price ${input.sellingPriceLocal ? 'K' + input.sellingPriceLocal : 'not set'}
-
-${scores.map((s) => `${s.methodName}: overall=${s.overallScore}, cost_eff=${s.costEfficiency}, cash_flow=${s.cashFlowTiming}, margin=${s.marginSensitivity}, lead=${s.leadTimeUrgency}`).join('\n')}
-
-Best overall: ${byOverall[0].methodName}
-Fastest: ${byTransit[0].methodName}
-Margin safest: ${byMargin[0].methodName}`,
+      content: shippingRecommender.buildUserMessage({
+        productName: '(not provided)',  // shipping rec doesn't take a product name today
+        unitCostUSD: input.unitCostUSD,
+        quantity: input.quantity,
+        sellingPriceLocal: input.sellingPriceLocal,
+        scores: scores.map((s) => ({
+          methodName: s.methodName,
+          transitDays: s.transitDays,
+          cost_efficiency: s.costEfficiency,
+          cash_flow: s.cashFlowTiming,
+          margin: s.marginSensitivity,
+          lead: s.leadTimeUrgency,
+          overall: s.overallScore,
+        })),
+        bestOverall: byOverall[0].methodName,
+        fastest: byTransit[0].methodName,
+        marginSafest: byMargin[0].methodName,
+      }),
     },
   ];
 
   const response = await groq.chat.completions.create({
     messages: messages as any,
-    model: 'llama-3.3-70b-versatile',
-    temperature: 0.5,
-    max_tokens: 256,
+    model: shippingRecommender.meta.model,
+    temperature: shippingRecommender.meta.temperature,
+    max_tokens: shippingRecommender.meta.maxTokens,
   });
 
   const content = response.choices[0]?.message?.content?.trim() || '';
@@ -157,26 +172,26 @@ export async function getProfitabilityAdvice(
   const messages = [
     {
       role: 'system' as const,
-      content: `You are a market intelligence analyst. Return a JSON object with:
-- insight: 1-2 sentence insight about pricing competitiveness
-- alert: warning message if price is below market average, otherwise null`,
+      content: profitabilityAdvisor.system,
     },
     {
       role: 'user' as const,
-      content: `Product: ${productName}
-Unit cost USD: ${unitCostUSD}
-Target margin: ${targetMarginPercent}%
-Required selling price: K${requiredSellingPrice.toFixed(2)}
-Market average: ${marketAvg ? 'K' + marketAvg.toFixed(2) : 'no data'}
-${isBelowMarketAverage ? 'WARNING: Below market average' : 'OK vs market'}`,
+      content: profitabilityAdvisor.buildUserMessage({
+        productName,
+        unitCostUSD,
+        targetMarginPercent,
+        requiredSellingPrice,
+        marketAverage: marketAvg,
+        isBelowMarketAverage,
+      }),
     },
   ];
 
   const response = await groq.chat.completions.create({
     messages: messages as any,
-    model: 'llama-3.3-70b-versatile',
-    temperature: 0.5,
-    max_tokens: 200,
+    model: profitabilityAdvisor.meta.model,
+    temperature: profitabilityAdvisor.meta.temperature,
+    max_tokens: profitabilityAdvisor.meta.maxTokens,
   });
 
   let aiMarketIntelligence = '';
@@ -329,26 +344,27 @@ export async function getDemandAdjustment(
   const messages = [
     {
       role: 'system' as const,
-      content: `You are a supply chain advisor. Return a JSON object with:
-- recommendation: 1 sentence recommendation`,
+      content: demandAdjustment.system,
     },
     {
       role: 'user' as const,
-      content: `Product: ${productName}
-Velocity: ${matched.avg_daily_velocity.toFixed(2)} units/day
-Days until stockout: ${matched.days_until_stockout}
-Urgency: ${matched.urgency}
-Stockout cost: K${stockoutCost.toFixed(2)}
-Air vs Sea premium: K${premium.toFixed(2)}/unit
-Should use air: ${shouldUseAir ? 'YES' : 'NO'}`,
+      content: demandAdjustment.buildUserMessage({
+        productName,
+        avgDailyVelocity: matched.avg_daily_velocity,
+        daysUntilStockout: matched.days_until_stockout,
+        urgency: matched.urgency,
+        stockoutCost,
+        shippingPremiumPerUnit: premium,
+        shouldUseAir,
+      }),
     },
   ];
 
   const response = await groq.chat.completions.create({
     messages: messages as any,
-    model: 'llama-3.3-70b-versatile',
-    temperature: 0.3,
-    max_tokens: 128,
+    model: demandAdjustment.meta.model,
+    temperature: demandAdjustment.meta.temperature,
+    max_tokens: demandAdjustment.meta.maxTokens,
   });
 
   let recommendation = '';

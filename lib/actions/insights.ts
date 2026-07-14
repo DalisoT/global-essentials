@@ -21,6 +21,7 @@ import groq from '@/lib/groq';
 import { requireAuth } from '@/lib/supabase-server';
 import { getDashboardStats } from './dashboard';
 import { formatCurrency } from '@/lib/utils';
+import { dailyInsights } from '@/lib/ai/prompts';
 
 export interface DailyInsight {
   /** A short, action-oriented bullet (≤ 140 chars). */
@@ -44,19 +45,6 @@ export interface DailyInsights {
   };
 }
 
-const SYSTEM_PROMPT = `You are a concise business advisor for a small retail shop.
-Given today's snapshot of the business, produce exactly 3 short bullet points
-that tell the owner what to focus on today.
-
-Rules:
-- Each bullet ≤ 140 characters.
-- Plain English, no jargon, no emojis, no markdown.
-- Each bullet must reference at least one concrete number from the snapshot.
-- Order: 1) the most important thing to do today, 2) a risk or warning, 3) a positive signal.
-- For each bullet also assign a tone from: positive | warning | action | info.
-- Output ONLY a valid JSON array of 3 objects: [{"text":"...","tone":"..."}, ...].
-  No prose, no explanation, no markdown fences.`;
-
 export async function getDailyInsights(): Promise<{ data?: DailyInsights; error?: string }> {
   const auth = await requireAuth();
   if ('error' in auth) return { error: auth.error };
@@ -74,23 +62,22 @@ export async function getDailyInsights(): Promise<{ data?: DailyInsights; error?
     upcomingDuesCount: stats.data.upcomingInstallments.length,
   };
 
-  const userPrompt = `Today's snapshot:
-- Ground Truth (paid sales − expenses): ${formatCurrency(snapshot.groundTruth)}
-- In Pipeline (unpaid installments): ${formatCurrency(snapshot.inPipeline)}
-- Low stock items needing restock: ${snapshot.lowStockCount}
-- Upcoming installments due in next 7 days: ${snapshot.upcomingDuesCount}
-
-Return the JSON array now.`;
+  const userPrompt = dailyInsights.buildUserMessage({
+    groundTruth: formatCurrency(snapshot.groundTruth),
+    inPipeline: formatCurrency(snapshot.inPipeline),
+    lowStockCount: snapshot.lowStockCount,
+    upcomingDuesCount: snapshot.upcomingDuesCount,
+  });
 
   try {
     const response = await groq.chat.completions.create({
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: dailyInsights.system },
         { role: 'user', content: userPrompt },
       ],
-      model: 'llama-3.3-70b-versatile',
-      temperature: 0.5,
-      max_tokens: 400,
+      model: dailyInsights.meta.model,
+      temperature: dailyInsights.meta.temperature,
+      max_tokens: dailyInsights.meta.maxTokens,
     });
 
     const content = response.choices[0]?.message?.content?.trim() || '';
