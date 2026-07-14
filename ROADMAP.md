@@ -68,7 +68,7 @@
 
 ## 3A — Plumbing
 
-- [ ] **3A.1.** Create `lib/ai/prompts/` directory; extract every Groq prompt
+- [x] **3A.1.** Create `lib/ai/prompts/` directory; extract every Groq prompt
       out of `lib/actions/ai.ts` and `lib/actions/import-advisor.ts` into
       versioned prompt files
 - [ ] **3A.2.** Create `lib/ai/tools.ts` — declare Groq function-calling tool
