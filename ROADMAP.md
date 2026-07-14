@@ -123,9 +123,9 @@
       started_at, completed_at, quiz_score)
 - [ ] **4A.4.** Create `lesson_resources` table (lesson_id, label, href, kind
       — internal route, external url, or app action)
-- [ ] **4A.5.** Seed `pillars`: Financial Literacy, Diversification, Business
+- [x] **4A.5.** Seed `pillars`: Financial Literacy, Diversification, Business
       Management, Operations & Scaling
-- [ ] **4A.6.** Seed first 12 lessons (3 per pillar) — see content list below
+- [x] **4A.6.** Seed first 12 lessons (3 per pillar) — see content list below
 
 ### Seed lessons (first batch)
 
