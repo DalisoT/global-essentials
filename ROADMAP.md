@@ -71,7 +71,7 @@
 - [x] **3A.1.** Create `lib/ai/prompts/` directory; extract every Groq prompt
       out of `lib/actions/ai.ts` and `lib/actions/import-advisor.ts` into
       versioned prompt files
-- [ ] **3A.2.** Create `lib/ai/tools.ts` — declare Groq function-calling tool
+- [x] **3A.2.** Create `lib/ai/tools.ts` — declare Groq function-calling tool
       schemas: `getPnL`, `getTrialBalance`, `getTopProducts`,
       `getAgingDebts`, `getCashPosition`, `getSlowMovingStock`
 - [ ] **3A.3.** Create `lib/ai/cfo-engine.ts` — function-calling loop that lets
