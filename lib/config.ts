@@ -26,3 +26,8 @@ export const FALLBACK_EXCHANGE_RATES = {
   ZAR: parseFloat(process.env.FALLBACK_ZAR_RATE || '0.79'),
   UGX: parseFloat(process.env.FALLBACK_UGX_RATE || '155'),
 };
+
+// AI CFO Copilot rate limit (3C.2). Per-user, per-day. Set CFO_DAILY_LIMIT=0
+// to disable the cap entirely (e.g. for testing). Default 30 — generous
+// enough that a single owner won't hit it during normal use.
+export const CFO_DAILY_LIMIT = parseInt(process.env.CFO_DAILY_LIMIT || '30', 10);

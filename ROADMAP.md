@@ -76,7 +76,7 @@
       `getAgingDebts`, `getCashPosition`, `getSlowMovingStock`
 - [x] **3A.3.** Create `lib/ai/cfo-engine.ts` — function-calling loop that lets
       the model call the tools and synthesize a final answer
-- [ ] **3A.4.** Add `ai_usage` table migration (user_id, route, prompt_tokens,
+- [x] **3A.4.** Add `ai_usage` table migration (user_id, route, prompt_tokens,
       completion_tokens, model, created_at) for cost tracking
 - [ ] **3A.5.** Add server action `askCFO(question)` in `lib/actions/cfo.ts`
 - [ ] **3A.6.** Add audit-log entry on every `askCFO` call (already wired by
