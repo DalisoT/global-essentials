@@ -22,6 +22,7 @@ import {
   MoreHorizontal,
   Calculator,
   BarChart3,
+  ShieldCheck,
 } from 'lucide-react';
 import { signOut } from '@/lib/actions/auth';
 import { useAuthStore } from '@/stores/auth-store';
@@ -47,6 +48,13 @@ const secondaryNav = [
   { href: '/import-simulator', label: 'Import', icon: Plane },
   { href: '/settings', label: 'Settings', icon: Settings },
   { href: '/export', label: 'Export', icon: Download },
+];
+
+// Admin-only surfaces. Kept separate from `secondaryNav` so non-admins never
+// see the link — defense in depth, since the audit page itself also blocks
+// non-admins (F10).
+const adminNav = [
+  { href: '/audit', label: 'Audit Log', icon: ShieldCheck },
 ];
 
 function NavItem({
@@ -211,6 +219,18 @@ export default function POSLayout({ children }: { children: React.ReactNode }) {
                     onClick={() => setDrawerOpen(false)}
                   />
                 ))}
+                {user?.role === 'admin' && (
+                  <>
+                    <div className="h-px bg-white/10 my-2" />
+                    {adminNav.map((item) => (
+                      <DrawerItem
+                        key={item.href}
+                        {...item}
+                        onClick={() => setDrawerOpen(false)}
+                      />
+                    ))}
+                  </>
+                )}
               </div>
               <div className="p-3 border-t border-white/10">
                 <form action={signOut}>

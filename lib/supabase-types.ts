@@ -56,6 +56,31 @@ export interface Expense {
   updated_at: string;
 }
 
+// ─────────────────────────────────────────────
+// AUDIT LOG
+// ─────────────────────────────────────────────
+
+/** Row as written to `audit_log`. See ROADMAP.md#F10. */
+export interface AuditLog {
+  id: string;
+  user_id: string | null;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  /** Free-form JSONB. UI should render defensively (keys may change per action). */
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+/** Audit log row joined with the actor's profile (full_name, role). */
+export interface AuditLogWithActor extends AuditLog {
+  actor: {
+    id: string;
+    full_name: string | null;
+    role: string | null;
+  } | null;
+}
+
 export interface DashboardStats {
   groundTruth: number;
   inPipeline: number;
