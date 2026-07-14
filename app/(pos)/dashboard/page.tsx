@@ -9,6 +9,8 @@ import {
   DollarSign,
   Clock,
   ArrowUpRight,
+  Brain,
+  Sparkles,
 } from 'lucide-react';
 import type { Sale, Product, Installment, Client } from '@/lib/supabase-types';
 
@@ -51,7 +53,12 @@ export default async function DashboardPage() {
               <span className="text-xs font-bold uppercase tracking-wider text-white/60">
                 Ground Truth
               </span>
-              <TrendingUp className="w-5 h-5 text-tactical-neon" />
+              <div className="flex items-center gap-2">
+                <AskCfoChip
+                  prefill="Walk me through my Ground Truth number. What does it include and exclude? How is it trending vs last month?"
+                />
+                <TrendingUp className="w-5 h-5 text-tactical-neon" />
+              </div>
             </div>
             <p className="text-4xl font-black tracking-tighter text-tactical-neon animate-count">
               {formatCurrency(stats.groundTruth)}
@@ -66,11 +73,17 @@ export default async function DashboardPage() {
         <div className="card-tactical relative overflow-hidden">
           <div className="absolute bottom-0 left-0 w-24 h-24 bg-tactical-orange/20 rounded-full blur-2xl" />
           <div className="relative">
-            <div className="flex items-center gap-2 mb-2">
-              <Clock className="w-4 h-4 text-tactical-orange" />
-              <span className="text-xs font-bold uppercase tracking-wider text-white/60">
-                In Pipeline
-              </span>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-tactical-orange" />
+                <span className="text-xs font-bold uppercase tracking-wider text-white/60">
+                  In Pipeline
+                </span>
+              </div>
+              <AskCfoChip
+                small
+                prefill="What does my In Pipeline number represent? How much is overdue vs not yet due, and which clients owe the most?"
+              />
             </div>
             <p className="text-2xl font-black tracking-tighter text-tactical-orange">
               {formatCurrency(stats.inPipeline)}
@@ -85,11 +98,17 @@ export default async function DashboardPage() {
         <Link href="/inventory" className="card-tactical relative overflow-hidden hover:bg-white/5 transition-colors">
           <div className="absolute bottom-0 right-0 w-24 h-24 bg-tactical-red/20 rounded-full blur-2xl" />
           <div className="relative">
-            <div className="flex items-center gap-2 mb-2">
-              <AlertTriangle className="w-4 h-4 text-tactical-red" />
-              <span className="text-xs font-bold uppercase tracking-wider text-white/60">
-                Low Stock
-              </span>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-tactical-red" />
+                <span className="text-xs font-bold uppercase tracking-wider text-white/60">
+                  Low Stock
+                </span>
+              </div>
+              <AskCfoChip
+                small
+                prefill="Which items are low on stock right now, and how urgently should I reorder each one?"
+              />
             </div>
             <p className="text-2xl font-black tracking-tighter text-tactical-red">
               {stats.lowStockProducts.length}
@@ -106,6 +125,21 @@ export default async function DashboardPage() {
         <h2 className="text-sm font-bold uppercase tracking-wider text-white/60">
           Quick Actions
         </h2>
+        <Link
+          href="/cfo"
+          className="card-tactical flex items-center gap-3 hover:border-tactical-blue/50 transition-colors group"
+        >
+          <div className="w-10 h-10 rounded-full bg-tactical-blue/20 flex items-center justify-center shrink-0 group-hover:bg-tactical-blue/30 transition-colors">
+            <Brain className="w-5 h-5 text-tactical-blue" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-black text-sm">Ask AI CFO</p>
+            <p className="text-xs text-white/40">
+              Plain-English questions about your books
+            </p>
+          </div>
+          <Sparkles className="w-4 h-4 text-white/20" />
+        </Link>
         <div className="grid grid-cols-2 gap-3">
           <Link
             href="/new-sale"
@@ -216,5 +250,35 @@ export default async function DashboardPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Per-card "Ask AI" chip (3B.5)
+//
+// Small button overlaid on each dashboard metric card. Clicking it takes
+// the user to /cfo with a context-aware question pre-filled in the chat
+// input. The cfo page reads `?prefill=...` on mount and seeds the input.
+//
+// `small` is for the smaller cards (In Pipeline, Low Stock) where we
+// only have room for the icon. The big Ground Truth card gets the icon
+// + "Ask AI" label.
+//
+// The chip stops click propagation so it doesn't double-navigate when
+// the parent card is itself a <Link> (Low Stock → /inventory).
+// ─────────────────────────────────────────────────────────────────────
+
+function AskCfoChip({ prefill, small = false }: { prefill: string; small?: boolean }) {
+  const href = `/cfo?prefill=${encodeURIComponent(prefill)}`;
+  return (
+    <Link
+      href={href}
+      onClick={(e) => e.stopPropagation()}
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-tactical-blue/15 text-tactical-blue text-[10px] font-bold uppercase tracking-wider hover:bg-tactical-blue/25 transition-colors"
+      title={prefill}
+    >
+      <Brain className="w-3 h-3" />
+      {!small && <span>Ask AI</span>}
+    </Link>
   );
 }

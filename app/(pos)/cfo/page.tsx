@@ -8,6 +8,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Brain,
@@ -103,11 +104,27 @@ const SUGGESTIONS: SuggestionChip[] = [
 // ─────────────────────────────────────────────────────────────────────
 
 export default function CfoPage() {
+  const searchParams = useSearchParams();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // On first mount, seed the input from ?prefill=... if present. The
+  // dashboard cards (3B.5) link to /cfo?prefill=<question> to give the
+  // user a one-tap "explain this number to me" experience.
+  // We use a ref guard so the prefill is consumed exactly once even if
+  // the effect re-runs (it can, in dev with React strict mode).
+  const prefillConsumed = useRef(false);
+  useEffect(() => {
+    if (prefillConsumed.current) return;
+    const prefill = searchParams?.get('prefill');
+    if (prefill) {
+      setDraft(prefill);
+      prefillConsumed.current = true;
+    }
+  }, [searchParams]);
 
   // Auto-scroll to the bottom on every new message + when loading flips on.
   useEffect(() => {

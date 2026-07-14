@@ -23,6 +23,7 @@ import {
   Calculator,
   BarChart3,
   ShieldCheck,
+  Brain,
 } from 'lucide-react';
 import { signOut } from '@/lib/actions/auth';
 import { useAuthStore } from '@/stores/auth-store';
@@ -40,6 +41,9 @@ const primaryNav = [
 ];
 
 const secondaryNav = [
+  // AI CFO is the flagship of Phase 3 — surface it first in the drawer
+  // so it's one tap from any screen, not buried under the rest.
+  { href: '/cfo', label: 'AI CFO', icon: Brain },
   { href: '/inventory', label: 'Inventory', icon: Package },
   { href: '/expenses', label: 'Expenses', icon: Wallet },
   { href: '/analytics', label: 'Analytics', icon: TrendingUp },
