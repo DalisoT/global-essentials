@@ -1,19 +1,7 @@
 import Link from 'next/link';
-import {
-  GraduationCap,
-  BookOpen,
-  Layers,
-  Briefcase,
-  Settings,
-  TrendingUp,
-  Wallet,
-  Target,
-  BarChart3,
-  Sparkles,
-  Brain,
-  type LucideIcon,
-} from 'lucide-react';
+import { GraduationCap, BookOpen } from 'lucide-react';
 import { getPillars } from '@/lib/actions/learn';
+import { resolvePillarIcon, pillarColorClasses } from '@/lib/learn/pillar-ui';
 
 /**
  * Learning Academy — pillar grid home (Phase 4 / 4C.1).
@@ -22,31 +10,7 @@ import { getPillars } from '@/lib/actions/learn';
  * `getPillars()` and renders them as a 1-col (mobile) / 2-col (sm+)
  * grid of tappable cards. Each card links to the pillar's lesson list
  * (4C.2 — `/(pos)/learn/[pillarSlug]/`).
- *
- * Icons are resolved server-side from the `icon` column on `pillars`.
- * The schema stores the icon name as a string ('BookOpen', 'Layers',
- * etc.) so the seed migration is portable. New pillars need a new
- * entry in `iconMap` below.
  */
-
-const iconMap: Record<string, LucideIcon> = {
-  BookOpen,
-  Layers,
-  Briefcase,
-  Settings,
-  // Add new pillar icons here as the seed grows.
-  TrendingUp,
-  Wallet,
-  Target,
-  BarChart3,
-  Sparkles,
-  Brain,
-};
-
-function resolveIcon(name: string | null): LucideIcon {
-  if (!name) return GraduationCap;
-  return iconMap[name] ?? GraduationCap;
-}
 
 export default async function LearnHomePage() {
   const { data: pillars, error } = await getPillars();
@@ -91,21 +55,18 @@ export default async function LearnHomePage() {
       {pillars && pillars.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {pillars.map((pillar) => {
-            const Icon = resolveIcon(pillar.icon);
-            // Map the color token to a Tailwind class for the icon
-            // background. Tailwind needs these to be full strings
-            // because it doesn't see dynamic class names at build time.
-            const colorClass = colorToClass(pillar.color);
+            const Icon = resolvePillarIcon(pillar.icon);
+            const color = pillarColorClasses(pillar.color);
             return (
               <Link
                 key={pillar.id}
                 href={`/learn/${pillar.slug}`}
                 className="card-tactical relative overflow-hidden hover:bg-white/5 transition-colors group"
               >
-                <div className={`absolute -top-8 -right-8 w-32 h-32 ${colorClass.bgBlur} rounded-full blur-3xl`} />
+                <div className={`absolute -top-8 -right-8 w-32 h-32 ${color.bgBlur} rounded-full blur-3xl`} />
                 <div className="relative flex items-start gap-3">
-                  <div className={`w-12 h-12 shrink-0 rounded-2xl ${colorClass.bg} flex items-center justify-center`}>
-                    <Icon className={`w-6 h-6 ${colorClass.icon}`} />
+                  <div className={`w-12 h-12 shrink-0 rounded-2xl ${color.bg} flex items-center justify-center`}>
+                    <Icon className={`w-6 h-6 ${color.icon}`} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <h2 className="text-lg font-black tracking-tighter">
@@ -129,55 +90,4 @@ export default async function LearnHomePage() {
       )}
     </div>
   );
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// Color token → Tailwind class map
-// ─────────────────────────────────────────────────────────────────────
-
-interface ColorClasses {
-  bg: string;
-  bgBlur: string;
-  icon: string;
-}
-
-function colorToClass(color: string | null): ColorClasses {
-  switch (color) {
-    case 'tactical-blue':
-      return {
-        bg: 'bg-tactical-blue/20',
-        bgBlur: 'bg-tactical-blue/20',
-        icon: 'text-tactical-blue',
-      };
-    case 'tactical-neon':
-      return {
-        bg: 'bg-tactical-neon/20',
-        bgBlur: 'bg-tactical-neon/20',
-        icon: 'text-tactical-neon',
-      };
-    case 'tactical-orange':
-      return {
-        bg: 'bg-tactical-orange/20',
-        bgBlur: 'bg-tactical-orange/20',
-        icon: 'text-tactical-orange',
-      };
-    case 'tactical-purple':
-      return {
-        bg: 'bg-tactical-purple/20',
-        bgBlur: 'bg-tactical-purple/20',
-        icon: 'text-tactical-purple',
-      };
-    case 'tactical-red':
-      return {
-        bg: 'bg-tactical-red/20',
-        bgBlur: 'bg-tactical-red/20',
-        icon: 'text-tactical-red',
-      };
-    default:
-      return {
-        bg: 'bg-white/10',
-        bgBlur: 'bg-white/5',
-        icon: 'text-white/70',
-      };
-  }
 }
