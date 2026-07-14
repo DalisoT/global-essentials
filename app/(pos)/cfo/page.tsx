@@ -5,6 +5,7 @@ import {
   useRef,
   useEffect,
   useCallback,
+  Suspense,
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
@@ -105,7 +106,13 @@ const SUGGESTIONS: SuggestionChip[] = [
 // Page
 // ─────────────────────────────────────────────────────────────────────
 
-export default function CfoPage() {
+// Next.js 14 requires `useSearchParams()` to live inside a <Suspense>
+// boundary when the page is statically generated. Otherwise the build
+// fails with "useSearchParams() should be wrapped in a suspense
+// boundary at page '/cfo'". We split the page so the inner component
+// can call the hook, and the outer default export wraps it.
+//   ref: https://nextjs.org/docs/messages/missing-suspense-with-csr-bailout
+function CfoPageInner() {
   const searchParams = useSearchParams();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
@@ -638,4 +645,15 @@ function formatTimestamp(iso: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+// Default export wraps CfoPageInner in <Suspense> so the useSearchParams
+// hook (read inside CfoPageInner) doesn't break the static build.
+// See the comment above CfoPageInner for the full explanation.
+export default function CfoPage() {
+  return (
+    <Suspense fallback={null}>
+      <CfoPageInner />
+    </Suspense>
+  );
 }
