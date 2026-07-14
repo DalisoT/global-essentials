@@ -16,7 +16,6 @@
     "@supabase/supabase-js": "^2.105.1",
     "@zxing/browser": "^0.2.0",
     "@zxing/library": "^0.23.0",
-    "appwrite": "^16.0.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "framer-motion": "^11.2.4",
