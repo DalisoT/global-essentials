@@ -107,6 +107,14 @@ CREATE INDEX idx_variants_product_id ON product_variants(product_id);
 CREATE INDEX idx_variants_sku ON product_variants(sku);
 CREATE INDEX idx_variants_barcode ON product_variants(barcode);
 
+-- Product variants RLS
+ALTER TABLE product_variants ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users can manage product_variants"
+  ON product_variants FOR ALL
+  TO authenticated
+  USING (auth.role() = 'authenticated')
+  WITH CHECK (auth.role() = 'authenticated');
+
 -- Shipping rates table for Import Simulator
 CREATE TABLE shipping_rates (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
