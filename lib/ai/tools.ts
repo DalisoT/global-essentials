@@ -125,6 +125,49 @@ export const CFO_TOOLS: ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'forecast_demand',
+      description:
+        "Predict a product's sales volume over a future horizon (1-90 days). Returns a daily series of predicted units (with upper/lower bounds) plus a confidence score (0-1) and the model used (e.g. '14-day moving average'). Use when the user asks 'will I sell enough of X', 'how much should I stock', 'what's the demand trend for X'.",
+      parameters: {
+        type: 'object',
+        properties: {
+          product_id: {
+            type: 'string',
+            description:
+              "The product's UUID. Get this from get_top_products or another tool that returns product identifiers.",
+          },
+          days: {
+            type: 'number',
+            description:
+              'How many days into the future to forecast. Defaults to 30. Capped at 90.',
+          },
+        },
+        required: ['product_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'forecast_cashflow',
+      description:
+        "Project the business's cash position for the next N days. Returns daily inflow (scheduled installments) vs outflow (logged expenses), the running cumulative cash, and the day cash is lowest. Use when the user asks 'how much cash will I have in 30 days', 'when am I lowest on cash', or 'can I afford to order more stock'.",
+      parameters: {
+        type: 'object',
+        properties: {
+          days: {
+            type: 'number',
+            description:
+              'How many days into the future to forecast. Defaults to 30. Capped at 90.',
+          },
+        },
+        required: [],
+      },
+    },
+  },
 ];
 
 /** Map for fast name → schema lookup by the engine. */
@@ -157,4 +200,11 @@ export interface GetCashPositionArgs {
 }
 export interface GetSlowMovingStockArgs {
   limit?: number;
+}
+export interface ForecastDemandArgs {
+  product_id: string;
+  days?: number;
+}
+export interface ForecastCashflowArgs {
+  days?: number;
 }

@@ -25,7 +25,13 @@ import {
 } from '@/lib/actions/accounting-utils';
 import { getPnL, getTrialBalance, getBalanceSheet } from '@/lib/actions/accounting';
 import { getTopProductsByProfit } from '@/lib/actions/profitability';
+import {
+  computeDemandForecast,
+  computeCashflowForecast,
+} from '@/lib/actions/forecast';
 import type {
+  ForecastCashflowArgs,
+  ForecastDemandArgs,
   GetAgingDebtsArgs,
   GetCashPositionArgs,
   GetPnLArgs,
@@ -406,6 +412,75 @@ async function handleGetSlowMovingStock(
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// 7. forecast_demand  (Phase 7.9 — predictive AI)
+// ─────────────────────────────────────────────────────────────────────
+
+async function handleForecastDemand(
+  supabase: SupabaseClient,
+  args: ForecastDemandArgs
+): Promise<ToolResult> {
+  const productId = String(args.product_id ?? '').trim();
+  if (!productId) return fail('product_id is required');
+  const days = Math.max(1, Math.min(90, Number(args.days) || 30));
+
+  const res = await computeDemandForecast(supabase, productId, days);
+  if (res.error || !res.data) return fail(res.error ?? 'Forecast failed');
+
+  const payload = res.data;
+  // Compact the series to save model context. We drop the bounds
+  // for the long series (the model rarely needs them) and keep
+  // the aggregate stats front-and-centre.
+  const totalPredicted = r2(
+    payload.series.reduce((a, b) => a + b.predicted_qty, 0)
+  );
+  const avgPerDay = r2(totalPredicted / Math.max(1, days));
+
+  return ok({
+    productId,
+    horizonDays: days,
+    totalPredicted,
+    avgPerDay,
+    confidence: payload.confidence,
+    methodLabel: payload.method_label,
+    series: payload.series.map((p) => ({
+      date: p.date,
+      predictedQty: p.predicted_qty,
+    })),
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// 8. forecast_cashflow  (Phase 7.9 — predictive AI)
+// ─────────────────────────────────────────────────────────────────────
+
+async function handleForecastCashflow(
+  supabase: SupabaseClient,
+  args: ForecastCashflowArgs
+): Promise<ToolResult> {
+  const days = Math.max(1, Math.min(90, Number(args.days) || 30));
+
+  const res = await computeCashflowForecast(supabase, days);
+  if (res.error || !res.data) return fail(res.error ?? 'Forecast failed');
+
+  const payload = res.data;
+  return ok({
+    horizonDays: days,
+    totalInflow: payload.total_inflow,
+    totalOutflow: payload.total_outflow,
+    endCash: payload.end_cash,
+    minCashDay: payload.min_cash_day,
+    minCashAmount: payload.min_cash_amount,
+    series: payload.series.map((p) => ({
+      date: p.date,
+      inflow: p.inflow,
+      outflow: p.outflow,
+      net: p.net,
+      cumulative: p.cumulative,
+    })),
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Dispatch table
 // ─────────────────────────────────────────────────────────────────────
 
@@ -431,4 +506,6 @@ export const cfoToolHandlers: Record<string, ToolHandler> = {
   get_aging_debts: handleGetAgingDebts,
   get_cash_position: handleGetCashPosition,
   get_slow_moving_stock: handleGetSlowMovingStock,
+  forecast_demand: handleForecastDemand,
+  forecast_cashflow: handleForecastCashflow,
 };
