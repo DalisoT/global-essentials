@@ -269,7 +269,7 @@ INSERT INTO lesson_resources (id, lesson_id, label, href, kind, display_order) V
   ('a1b2c3d4-9002-4000-a000-000000000002', 'a1b2c3d4-1002-4000-a000-000000000002',
    'Ask the AI CFO about runway', '/cfo?prefill=How%20much%20cash%20do%20I%20have%20right%20now%2C%20and%20what%20is%20my%20runway%20in%20months%3F', 'internal', 1),
   -- Working capital → AI CFO
-  ('a1b2c3d4-9003-4000-a000-000000000003', 'a1b2c3d4-1003-4000-a000-000000000001',
+  ('a1b2c3d4-9003-4000-a000-000000000003', 'a1b2c3d4-1003-4000-a000-000000000003',
    'Ask the AI CFO about cash + runway', '/cfo?prefill=How%20much%20cash%20do%20I%20have%20right%20now%2C%20and%20what%20is%20my%20runway%20in%20months%3F', 'internal', 1),
   -- AR aging → Debts page
   ('a1b2c3d4-9004-4000-a000-000000000004', 'a1b2c3d4-1004-4000-a000-000000000004',
