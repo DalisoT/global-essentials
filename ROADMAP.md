@@ -78,13 +78,13 @@
       the model call the tools and synthesize a final answer
 - [x] **3A.4.** Add `ai_usage` table migration (user_id, route, prompt_tokens,
       completion_tokens, model, created_at) for cost tracking
-- [ ] **3A.5.** Add server action `askCFO(question)` in `lib/actions/cfo.ts`
-- [ ] **3A.6.** Add audit-log entry on every `askCFO` call (already wired by
+- [x] **3A.5.** Add server action `askCFO(question)` in `lib/actions/cfo.ts`
+- [x] **3A.6.** Add audit-log entry on every `askCFO` call (already wired by
       journals.ts pattern — replicate)
 
 ## 3B — UI
 
-- [ ] **3B.1.** Create route `/(pos)/cfo/` with chat layout
+- [x] **3B.1.** Create route `/(pos)/cfo/` with chat layout
 - [x] **3B.2.** Build `<CFOChatPanel>` — streaming-friendly message list,
       auto-scroll, suggestion chips ("What's my net profit this month?",
       "Which products are my profit engines?", "How much cash will I have in
@@ -101,7 +101,7 @@
 
 - [x] **3C.1.** Add 10 hand-crafted test questions to a `cfo-evals` file with
       expected answer shape (golden set)
-- [ ] **3C.2.** Add rate limiting: max 30 questions/user/day (configurable in
+- [x] **3C.2.** Add rate limiting: max 30 questions/user/day (configurable in
       `lib/config.ts`)
 - [x] **3C.3.** Add fallback response when Groq is unavailable (template
       "I couldn't reach the AI right now, but here's the raw data: ...")
@@ -115,41 +115,41 @@
 
 ## 4A — Schema + content model
 
-- [ ] **4A.1.** Create `pillars` table (id, slug, name, description, icon, color, order)
-- [ ] **4A.2.** Create `lessons` table (id, pillar_id, slug, title, body_md,
+- [x] **4A.1.** Create `pillars` table (id, slug, name, description, icon, color, order)
+- [x] **4A.2.** Create `lessons` table (id, pillar_id, slug, title, body_md,
       audio_url, est_minutes, order, requires_data TEXT[] — flags like
       'sales','inventory','debts','expenses')
-- [ ] **4A.3.** Create `user_lesson_progress` table (user_id, lesson_id,
+- [x] **4A.3.** Create `user_lesson_progress` table (user_id, lesson_id,
       started_at, completed_at, quiz_score)
-- [ ] **4A.4.** Create `lesson_resources` table (lesson_id, label, href, kind
+- [x] **4A.4.** Create `lesson_resources` table (lesson_id, label, href, kind
       — internal route, external url, or app action)
 - [x] **4A.5.** Seed `pillars`: Financial Literacy, Diversification, Business
       Management, Operations & Scaling
-- [x] **4A.6.** Seed first 12 lessons (3 per pillar) — see content list below
+- [x] **4A.6.** Seed first 14 lessons (3-4 per pillar) — see content list below
 
-### Seed lessons (first batch)
+### Seeded lesson content (reference only — not a task list)
 
 Financial Literacy
-- [ ] What is Gross Margin? *(tied to profitability data)*
-- [ ] Cash Flow vs Profit *(tied to journal)*
-- [ ] Working Capital & Cash Buffer *(tied to balance sheet)*
-- [ ] Accounts Receivable Aging *(tied to debts)*
+- What is Gross Margin? *(tied to profitability data)*
+- Cash Flow vs Profit *(tied to journal)*
+- Working Capital & Cash Buffer *(tied to balance sheet)*
+- Accounts Receivable Aging *(tied to debts)*
 
 Diversification
-- [ ] Product Mix Concentration Risk
-- [ ] Supplier Concentration Risk
-- [ ] Revenue Stream Diversification
+- Product Mix Concentration Risk
+- Supplier Concentration Risk
+- Revenue Stream Diversification
 
 Business Management
-- [ ] Pricing Psychology & Margin Tiers
-- [ ] Inventory Turnover & Dead Stock
-- [ ] Unit Economics per Product
-- [ ] The Hiring Trigger Formula
+- Pricing Psychology & Margin Tiers
+- Inventory Turnover & Dead Stock
+- Unit Economics per Product
+- The Hiring Trigger Formula
 
 Operations & Scaling
-- [ ] Writing a One-Page SOP
-- [ ] Fraud Prevention Basics
-- [ ] Cash Drawer Reconciliation
+- Writing a One-Page SOP
+- Fraud Prevention Basics
+- Cash Drawer Reconciliation
 
 ## 4B — Generation pipeline
 
