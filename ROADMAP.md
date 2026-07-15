@@ -245,7 +245,7 @@ Operations & Scaling
 - [x] **7.6.** UI: Per-product forecast card in inventory page
 - [x] **7.7.** Smart reorder alert: combine forecast + supplier lead time +
       safety stock (existing `reorder.ts` action — wire UI to it)
-- [ ] **7.8.** Scheduled job (Vercel Cron) to regenerate forecasts nightly
+- [x] **7.8.** Scheduled job (Vercel Cron) to regenerate forecasts nightly
 - [ ] **7.9.** CFO tool additions: `forecastCashFlow`, `forecastDemand`
 
 ---

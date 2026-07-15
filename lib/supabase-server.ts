@@ -1,6 +1,7 @@
 'use server';
 
 import { createServerClient } from '@supabase/ssr';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 
 export async function createServerSupabaseClient() {
@@ -26,6 +27,42 @@ export async function createServerSupabaseClient() {
       },
     }
   );
+}
+
+/**
+ * Service-role Supabase client. Bypasses RLS — use ONLY from
+ * trusted server contexts:
+ *   - Vercel Cron jobs (no logged-in user)
+ *   - Background workers
+ *   - Webhooks from trusted third parties
+ *
+ * Never import this from a file that's reachable from a user
+ * request. The auth boundary for this client is the CRON_SECRET
+ * check at the top of the API route that uses it.
+ *
+ * Requires `SUPABASE_SERVICE_ROLE_KEY` in env. Falls back to the
+ * anon key in dev so local `pnpm dev` doesn't break — log a
+ * warning when that happens.
+ */
+export async function createServiceRoleClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    throw new Error(
+      'createServiceRoleClient: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set'
+    );
+  }
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.warn(
+      '[supabase-server] SUPABASE_SERVICE_ROLE_KEY not set; falling back to anon key. ' +
+        'Cron and webhook routes that depend on bypassing RLS will NOT work in production.'
+    );
+  }
+  return createServiceClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 }
 
 export async function requireAuth(): Promise<{ supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>; userId: string } | { error: string; supabase?: never; userId?: never }> {

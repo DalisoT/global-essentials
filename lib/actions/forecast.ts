@@ -75,17 +75,11 @@ const DEMAND_MOVING_AVG_DAYS = 14;
 const DEMAND_BAND_FRACTION = 0.25;
 
 /**
- * Return a demand forecast for one product. Algorithm (v1):
- *   1. Fetch sales for the product in the last DEMAND_HISTORY_DAYS
- *      days, grouped by local day.
- *   2. Compute the DEMAND_MOVING_AVG_DAYS-day moving average.
- *   3. Project that average forward for `days` days with a flat
- *      series (no seasonality, no trend). The ±25% band is a
- *      placeholder until we have an honest confidence model.
- *   4. UPSERT into the forecasts cache.
+ * Return a demand forecast for one product. Delegates to the core
+ * helper, which is shared with the cron (7.8). The action layer
+ * only handles auth + the cache contract.
  *
- * For products with zero sales history, returns a flat zero forecast
- * with a low confidence score — never throws, never returns null.
+ * Algorithm (v1) lives in computeDemandForecast below.
  */
 export async function forecastDemand(
   productId: string,
@@ -93,83 +87,8 @@ export async function forecastDemand(
 ): Promise<{ data?: Forecast; error?: string }> {
   const auth = await requireAuth();
   if ('error' in auth) return { error: auth.error };
-  const { supabase, userId: _userId } = auth;
-
-  if (!productId) return { error: 'productId is required' };
-  if (typeof days !== 'number' || days < 1 || days > 90) {
-    return { error: 'days must be between 1 and 90' };
-  }
-
-  // 1) Check the cache.
-  const cached = await getCachedForecast(supabase, 'demand', productId, days);
-  if (cached) return { data: cached };
-
-  // 2) Fetch sales history.
-  const since = new Date();
-  since.setDate(since.getDate() - DEMAND_HISTORY_DAYS);
-  const { data: salesRows, error: salesError } = await supabase
-    .from('sales')
-    .select('quantity, created_at')
-    .eq('product_id', productId)
-    .is('deleted_at', null)
-    .gte('created_at', since.toISOString());
-
-  if (salesError) return { error: salesError.message };
-
-  // 3) Bucket by local day.
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Africa/Lusaka',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-  const perDay = new Map<string, number>();
-  for (const row of (salesRows ?? []) as Array<{ quantity: number; created_at: string }>) {
-    const day = fmt.format(new Date(row.created_at));
-    perDay.set(day, (perDay.get(day) ?? 0) + (row.quantity ?? 0));
-  }
-
-  // 4) Build a continuous 30-day series and compute the moving average.
-  const today = localDateString();
-  const historyDays: number[] = [];
-  for (let i = DEMAND_HISTORY_DAYS - 1; i >= 0; i--) {
-    const day = addDays(today, -i);
-    historyDays.push(perDay.get(day) ?? 0);
-  }
-  const window = historyDays.slice(-DEMAND_MOVING_AVG_DAYS);
-  const sum = window.reduce((a, b) => a + b, 0);
-  const movingAvg = window.length > 0 ? sum / window.length : 0;
-  // Confidence scales with history depth. 30 days = 1.0, 0 days = 0.1.
-  const nonZeroDays = historyDays.filter((q) => q > 0).length;
-  const confidence = Math.max(0.1, Math.min(1, 0.1 + (nonZeroDays / DEMAND_HISTORY_DAYS) * 0.9));
-
-  // 5) Project forward.
-  const series: DemandForecastPayload['series'] = [];
-  for (let i = 1; i <= days; i++) {
-    const date = addDays(today, i);
-    const predicted = r2(movingAvg);
-    series.push({
-      date,
-      predicted_qty: predicted,
-      lower: r2(Math.max(0, predicted * (1 - DEMAND_BAND_FRACTION))),
-      upper: r2(predicted * (1 + DEMAND_BAND_FRACTION)),
-    });
-  }
-
-  const payload: DemandForecastPayload = {
-    series,
-    confidence: r2(confidence),
-    method_label: `${DEMAND_MOVING_AVG_DAYS}-day moving average`,
-  };
-
-  // 6) UPSERT into the cache.
-  return upsertForecast(supabase, {
-    kind: 'demand',
-    target_id: productId,
-    horizon_days: days,
-    payload: payload as unknown as Record<string, unknown>,
-    model: 'simple-moving-avg',
-  });
+  const { supabase } = auth;
+  return forceRegenerateForecast(supabase, 'demand', productId, days);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -204,108 +123,7 @@ export async function forecastCashFlow(
   const auth = await requireAuth();
   if ('error' in auth) return { error: auth.error };
   const { supabase } = auth;
-
-  if (typeof days !== 'number' || days < 1 || days > 90) {
-    return { error: 'days must be between 1 and 90' };
-  }
-
-  // 1) Check the cache. Cashflow uses target_id = NULL.
-  const cached = await getCachedForecast(supabase, 'cashflow', null, days);
-  if (cached) return { data: cached };
-
-  // 2) Compute opening cash from the dashboard. We don't recompute
-  //    the full dashboard stats — we just need cash-on-hand, but
-  //    the dashboard's Ground Truth = paid-sales - expenses is the
-  //    closest number we have. For a real "cash on hand" we'd want
-  //    a separate query; for v1 we use Ground Truth as a proxy.
-  const { getDashboardStats } = await import('@/lib/actions/dashboard');
-  const statsRes = await getDashboardStats();
-  const openingCash = statsRes.data?.groundTruth ?? 0;
-
-  // 3) Inflows: installments due in the next `days` days.
-  const today = new Date();
-  const horizonEnd = new Date();
-  horizonEnd.setDate(horizonEnd.getDate() + days);
-  const { data: installments, error: instError } = await supabase
-    .from('installments')
-    .select('amount_due, due_date, status')
-    .neq('status', 'paid')
-    .gte('due_date', today.toISOString().slice(0, 10))
-    .lte('due_date', horizonEnd.toISOString().slice(0, 10));
-
-  if (instError) return { error: instError.message };
-
-  // 4) Outflows: expenses created in the next `days` days.
-  //    We don't have a `due_date` on expenses; created_at is the
-  //    best proxy for "expected to leave the account this week".
-  const { data: expenses, error: expError } = await supabase
-    .from('expenses')
-    .select('amount, created_at')
-    .is('deleted_at', null)
-    .gte('created_at', today.toISOString())
-    .lte('created_at', horizonEnd.toISOString());
-
-  if (expError) return { error: expError.message };
-
-  // 5) Bucket by local day.
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Africa/Lusaka',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-  const inflowsByDay = new Map<string, number>();
-  const outflowsByDay = new Map<string, number>();
-  for (const inst of (installments ?? []) as Array<{
-    amount_due: number;
-    due_date: string;
-  }>) {
-    const day = (inst.due_date ?? '').slice(0, 10);
-    inflowsByDay.set(day, (inflowsByDay.get(day) ?? 0) + (inst.amount_due ?? 0));
-  }
-  for (const exp of (expenses ?? []) as Array<{ amount: number; created_at: string }>) {
-    const day = fmt.format(new Date(exp.created_at));
-    outflowsByDay.set(day, (outflowsByDay.get(day) ?? 0) + (exp.amount ?? 0));
-  }
-
-  // 6) Build the series.
-  const todayStr = localDateString();
-  const series: CashflowForecastPayload['series'] = [];
-  let cumulative = openingCash;
-  let totalIn = 0;
-  let totalOut = 0;
-  let minCash = openingCash;
-  let minCashDay = todayStr;
-  for (let i = 1; i <= days; i++) {
-    const date = addDays(todayStr, i);
-    const inflow = inflowsByDay.get(date) ?? 0;
-    const outflow = outflowsByDay.get(date) ?? 0;
-    cumulative = r2(cumulative + inflow - outflow);
-    totalIn = r2(totalIn + inflow);
-    totalOut = r2(totalOut + outflow);
-    if (cumulative < minCash) {
-      minCash = cumulative;
-      minCashDay = date;
-    }
-    series.push({ date, inflow, outflow, net: r2(inflow - outflow), cumulative });
-  }
-
-  const payload: CashflowForecastPayload = {
-    series,
-    total_inflow: totalIn,
-    total_outflow: totalOut,
-    end_cash: cumulative,
-    min_cash_day: minCashDay,
-    min_cash_amount: minCash,
-  };
-
-  return upsertForecast(supabase, {
-    kind: 'cashflow',
-    target_id: null,
-    horizon_days: days,
-    payload: payload as unknown as Record<string, unknown>,
-    model: 'rule-based',
-  });
+  return forceRegenerateForecast(supabase, 'cashflow', null, days);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -334,93 +152,7 @@ export async function predictDefaults(
   const auth = await requireAuth();
   if ('error' in auth) return { error: auth.error };
   const { supabase } = auth;
-
-  if (!clientId) return { error: 'clientId is required' };
-
-  // 1) Check the cache. Default-risk uses horizon_days=30 as the
-  //    standard "next month" window.
-  const cached = await getCachedForecast(supabase, 'default_risk', clientId, 30);
-  if (cached) return { data: cached };
-
-  // 2) Pull the client's installments.
-  const { data: installments, error: instError } = await supabase
-    .from('installments')
-    .select('amount_due, amount_paid, due_date, status, paid_at')
-    .eq('client_id', clientId);
-
-  if (instError) return { error: instError.message };
-
-  const rows = (installments ?? []) as Array<{
-    amount_due: number;
-    amount_paid?: number;
-    due_date: string;
-    status: string;
-    paid_at?: string | null;
-  }>;
-
-  const now = new Date();
-  let score = 0;
-  const factors: DefaultRiskForecastPayload['factors'] = [];
-
-  // Bucket by overdue window. We compare due_date to today.
-  let overdue30 = 0;
-  let overdue90 = 0;
-  let onTimeCount = 0;
-  for (const r of rows) {
-    const due = new Date(r.due_date);
-    const msPerDay = 1000 * 60 * 60 * 24;
-    const daysOverdue = Math.floor((now.getTime() - due.getTime()) / msPerDay);
-    if (r.status === 'paid' && r.paid_at && daysOverdue <= 0) {
-      onTimeCount += 1;
-    } else if (daysOverdue > 90) {
-      overdue90 += 1;
-    } else if (daysOverdue > 30) {
-      overdue30 += 1;
-    }
-  }
-
-  if (overdue90 > 0) {
-    score += 0.4;
-    factors.push({ label: `${overdue90} installment(s) overdue 90+ days`, impact: 0.4 });
-  }
-  if (overdue30 > 0) {
-    score += 0.2;
-    factors.push({ label: `${overdue30} installment(s) 30-90 days overdue`, impact: 0.2 });
-  }
-  if (overdue30 >= 2) {
-    score += 0.15;
-    factors.push({ label: '2+ installments in the 30-90 day bucket', impact: 0.15 });
-  }
-  if (onTimeCount === 0 && rows.length > 0) {
-    score += 0.15;
-    factors.push({ label: 'No on-time payments in history', impact: 0.15 });
-  }
-  if (rows.length >= 3 && overdue30 === 0 && overdue90 === 0) {
-    score -= 0.1;
-    factors.push({ label: '3+ installments, none overdue', impact: -0.1 });
-  }
-  if (rows.length < 3) {
-    score -= 0.1;
-    factors.push({ label: 'New client (<3 installments on file)', impact: -0.1 });
-  }
-
-  score = Math.max(0, Math.min(1, score));
-  const risk_band: DefaultRiskForecastPayload['risk_band'] =
-    score >= 0.6 ? 'high' : score >= 0.3 ? 'medium' : 'low';
-
-  const payload: DefaultRiskForecastPayload = {
-    probability: r2(score),
-    risk_band,
-    factors: factors.sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact)),
-  };
-
-  return upsertForecast(supabase, {
-    kind: 'default_risk',
-    target_id: clientId,
-    horizon_days: 30,
-    payload: payload as unknown as Record<string, unknown>,
-    model: 'rule-based',
-  });
+  return forceRegenerateForecast(supabase, 'default_risk', clientId, 30);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -513,6 +245,311 @@ async function upsertForecast(
 // should hardcode or import from a non-'use server' file. We
 // intentionally do not re-export it from this module because the
 // 'use server' directive forbids non-async exports.
+
+// ─────────────────────────────────────────────────────────────────────
+// Core helpers (shared by 7.2-7.7 + 7.8 cron)
+//
+// These take a `supabase` client directly so they can be called
+// from a service-role context (cron, webhooks) OR a user context
+// (dashboard, inventory). The user-facing actions above are
+// thin wrappers that call requireAuth() and then delegate here.
+// ─────────────────────────────────────────────────────────────────────
+
+type SupabaseClient = Awaited<ReturnType<typeof requireAuth>> extends infer R
+  ? R extends { supabase: infer S }
+    ? S
+    : never
+  : never;
+
+export async function computeDemandForecast(
+  supabase: SupabaseClient,
+  productId: string,
+  days: number
+): Promise<{ data?: DemandForecastPayload; error?: string }> {
+  if (!productId) return { error: 'productId is required' };
+  if (typeof days !== 'number' || days < 1 || days > 90) {
+    return { error: 'days must be between 1 and 90' };
+  }
+
+  // Cache check.
+  const cached = await getCachedForecast(supabase, 'demand', productId, days);
+  if (cached) {
+    return { data: cached.payload as unknown as DemandForecastPayload };
+  }
+
+  // Compute fresh.
+  const since = new Date();
+  since.setDate(since.getDate() - DEMAND_HISTORY_DAYS);
+  const { data: salesRows, error: salesError } = await supabase
+    .from('sales')
+    .select('quantity, created_at')
+    .eq('product_id', productId)
+    .is('deleted_at', null)
+    .gte('created_at', since.toISOString());
+
+  if (salesError) return { error: salesError.message };
+
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Lusaka',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const perDay = new Map<string, number>();
+  for (const row of (salesRows ?? []) as Array<{ quantity: number; created_at: string }>) {
+    const day = fmt.format(new Date(row.created_at));
+    perDay.set(day, (perDay.get(day) ?? 0) + (row.quantity ?? 0));
+  }
+
+  const today = localDateString();
+  const historyDays: number[] = [];
+  for (let i = DEMAND_HISTORY_DAYS - 1; i >= 0; i--) {
+    const day = addDays(today, -i);
+    historyDays.push(perDay.get(day) ?? 0);
+  }
+  const window = historyDays.slice(-DEMAND_MOVING_AVG_DAYS);
+  const sum = window.reduce((a, b) => a + b, 0);
+  const movingAvg = window.length > 0 ? sum / window.length : 0;
+  const nonZeroDays = historyDays.filter((q) => q > 0).length;
+  const confidence = Math.max(0.1, Math.min(1, 0.1 + (nonZeroDays / DEMAND_HISTORY_DAYS) * 0.9));
+
+  const series: DemandForecastPayload['series'] = [];
+  for (let i = 1; i <= days; i++) {
+    const date = addDays(today, i);
+    const predicted = r2(movingAvg);
+    series.push({
+      date,
+      predicted_qty: predicted,
+      lower: r2(Math.max(0, predicted * (1 - DEMAND_BAND_FRACTION))),
+      upper: r2(predicted * (1 + DEMAND_BAND_FRACTION)),
+    });
+  }
+
+  return {
+    data: {
+      series,
+      confidence: r2(confidence),
+      method_label: `${DEMAND_MOVING_AVG_DAYS}-day moving average`,
+    },
+  };
+}
+
+export async function computeCashflowForecast(
+  supabase: SupabaseClient,
+  days: number
+): Promise<{ data?: CashflowForecastPayload; error?: string }> {
+  if (typeof days !== 'number' || days < 1 || days > 90) {
+    return { error: 'days must be between 1 and 90' };
+  }
+
+  const cached = await getCachedForecast(supabase, 'cashflow', null, days);
+  if (cached) {
+    return { data: cached.payload as unknown as CashflowForecastPayload };
+  }
+
+  const { getDashboardStats } = await import('@/lib/actions/dashboard');
+  const statsRes = await getDashboardStats();
+  const openingCash = (statsRes as { data?: { groundTruth?: number } }).data?.groundTruth ?? 0;
+
+  const today = new Date();
+  const horizonEnd = new Date();
+  horizonEnd.setDate(horizonEnd.getDate() + days);
+  const { data: installments, error: instError } = await supabase
+    .from('installments')
+    .select('amount_due, due_date, status')
+    .neq('status', 'paid')
+    .gte('due_date', today.toISOString().slice(0, 10))
+    .lte('due_date', horizonEnd.toISOString().slice(0, 10));
+
+  if (instError) return { error: instError.message };
+
+  const { data: expenses, error: expError } = await supabase
+    .from('expenses')
+    .select('amount, created_at')
+    .is('deleted_at', null)
+    .gte('created_at', today.toISOString())
+    .lte('created_at', horizonEnd.toISOString());
+
+  if (expError) return { error: expError.message };
+
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Lusaka',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const inflowsByDay = new Map<string, number>();
+  const outflowsByDay = new Map<string, number>();
+  for (const inst of (installments ?? []) as Array<{
+    amount_due: number;
+    due_date: string;
+  }>) {
+    const day = (inst.due_date ?? '').slice(0, 10);
+    inflowsByDay.set(day, (inflowsByDay.get(day) ?? 0) + (inst.amount_due ?? 0));
+  }
+  for (const exp of (expenses ?? []) as Array<{ amount: number; created_at: string }>) {
+    const day = fmt.format(new Date(exp.created_at));
+    outflowsByDay.set(day, (outflowsByDay.get(day) ?? 0) + (exp.amount ?? 0));
+  }
+
+  const todayStr = localDateString();
+  const series: CashflowForecastPayload['series'] = [];
+  let cumulative = openingCash;
+  let totalIn = 0;
+  let totalOut = 0;
+  let minCash = openingCash;
+  let minCashDay = todayStr;
+  for (let i = 1; i <= days; i++) {
+    const date = addDays(todayStr, i);
+    const inflow = inflowsByDay.get(date) ?? 0;
+    const outflow = outflowsByDay.get(date) ?? 0;
+    cumulative = r2(cumulative + inflow - outflow);
+    totalIn = r2(totalIn + inflow);
+    totalOut = r2(totalOut + outflow);
+    if (cumulative < minCash) {
+      minCash = cumulative;
+      minCashDay = date;
+    }
+    series.push({ date, inflow, outflow, net: r2(inflow - outflow), cumulative });
+  }
+
+  return {
+    data: {
+      series,
+      total_inflow: totalIn,
+      total_outflow: totalOut,
+      end_cash: cumulative,
+      min_cash_day: minCashDay,
+      min_cash_amount: minCash,
+    },
+  };
+}
+
+export async function computeDefaultRiskForecast(
+  supabase: SupabaseClient,
+  clientId: string
+): Promise<{ data?: DefaultRiskForecastPayload; error?: string }> {
+  if (!clientId) return { error: 'clientId is required' };
+
+  const cached = await getCachedForecast(supabase, 'default_risk', clientId, 30);
+  if (cached) {
+    return { data: cached.payload as unknown as DefaultRiskForecastPayload };
+  }
+
+  const { data: installments, error: instError } = await supabase
+    .from('installments')
+    .select('amount_due, amount_paid, due_date, status, paid_at')
+    .eq('client_id', clientId);
+
+  if (instError) return { error: instError.message };
+
+  const rows = (installments ?? []) as Array<{
+    amount_due: number;
+    amount_paid?: number;
+    due_date: string;
+    status: string;
+    paid_at?: string | null;
+  }>;
+
+  const now = new Date();
+  let score = 0;
+  const factors: DefaultRiskForecastPayload['factors'] = [];
+  let overdue30 = 0;
+  let overdue90 = 0;
+  let onTimeCount = 0;
+  for (const r of rows) {
+    const due = new Date(r.due_date);
+    const msPerDay = 1000 * 60 * 60 * 24;
+    const daysOverdue = Math.floor((now.getTime() - due.getTime()) / msPerDay);
+    if (r.status === 'paid' && r.paid_at && daysOverdue <= 0) {
+      onTimeCount += 1;
+    } else if (daysOverdue > 90) {
+      overdue90 += 1;
+    } else if (daysOverdue > 30) {
+      overdue30 += 1;
+    }
+  }
+  if (overdue90 > 0) {
+    score += 0.4;
+    factors.push({ label: `${overdue90} installment(s) overdue 90+ days`, impact: 0.4 });
+  }
+  if (overdue30 > 0) {
+    score += 0.2;
+    factors.push({ label: `${overdue30} installment(s) 30-90 days overdue`, impact: 0.2 });
+  }
+  if (overdue30 >= 2) {
+    score += 0.15;
+    factors.push({ label: '2+ installments in the 30-90 day bucket', impact: 0.15 });
+  }
+  if (onTimeCount === 0 && rows.length > 0) {
+    score += 0.15;
+    factors.push({ label: 'No on-time payments in history', impact: 0.15 });
+  }
+  if (rows.length >= 3 && overdue30 === 0 && overdue90 === 0) {
+    score -= 0.1;
+    factors.push({ label: '3+ installments, none overdue', impact: -0.1 });
+  }
+  if (rows.length < 3) {
+    score -= 0.1;
+    factors.push({ label: 'New client (<3 installments on file)', impact: -0.1 });
+  }
+
+  score = Math.max(0, Math.min(1, score));
+  const risk_band: DefaultRiskForecastPayload['risk_band'] =
+    score >= 0.6 ? 'high' : score >= 0.3 ? 'medium' : 'low';
+
+  return {
+    data: {
+      probability: r2(score),
+      risk_band,
+      factors: factors.sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact)),
+    },
+  };
+}
+
+/**
+ * Regenerate a single forecast kind for a given (target_id, horizon_days)
+ * using a caller-supplied supabase client (e.g. service-role for the cron).
+ * Bypasses the cache to force a fresh write.
+ */
+export async function forceRegenerateForecast(
+  supabase: SupabaseClient,
+  kind: 'demand' | 'cashflow' | 'default_risk',
+  targetId: string | null,
+  horizonDays: number
+): Promise<{ data?: Forecast; error?: string }> {
+  let payload: Record<string, unknown> | null = null;
+  let model = 'simple-moving-avg';
+
+  if (kind === 'demand' && targetId) {
+    const res = await computeDemandForecast(supabase, targetId, horizonDays);
+    if (res.error) return { error: res.error };
+    payload = res.data as unknown as Record<string, unknown>;
+    model = 'simple-moving-avg';
+  } else if (kind === 'cashflow') {
+    const res = await computeCashflowForecast(supabase, horizonDays);
+    if (res.error) return { error: res.error };
+    payload = res.data as unknown as Record<string, unknown>;
+    model = 'rule-based';
+  } else if (kind === 'default_risk' && targetId) {
+    const res = await computeDefaultRiskForecast(supabase, targetId);
+    if (res.error) return { error: res.error };
+    payload = res.data as unknown as Record<string, unknown>;
+    model = 'rule-based';
+  } else {
+    return { error: `Invalid kind/target combination: ${kind} / ${targetId}` };
+  }
+
+  if (!payload) return { error: 'No payload produced' };
+
+  return upsertForecast(supabase, {
+    kind,
+    target_id: targetId,
+    horizon_days: horizonDays,
+    payload,
+    model,
+  });
+}
 
 // ─────────────────────────────────────────────────────────────────────
 // 7.7 — getReorderAlerts()
