@@ -156,8 +156,10 @@ Operations & Scaling
 - [x] **4B.1.** Server action `generatePersonalizedQuiz(lessonId)` — Groq reads
       lesson + your actual data (sales, profit, debt aging, inventory) and
       returns 3-5 multiple-choice questions with explanations
-- [ ] **4B.2.** Server action `generateLessonAudio(lessonId)` — optional Groq
-      TTS for audio narration; cache by `lesson.body_md` hash
+- [x] **4B.2.** Audio narration via Web Speech API (Groq has no TTS;
+      pre-generated `audio_url` column on lessons is preserved as the
+      upgrade path when the user later wants to invest in ElevenLabs
+      / OpenAI TTS)
 - [ ] **4B.3.** Server action `generateLessonExamples(lessonId)` — fetches
       real numbers from your DB and injects them into the lesson body
 

@@ -752,6 +752,42 @@ function progressRowsSafe(rows: unknown): unknown[] {
   return Array.isArray(rows) ? rows : [];
 }
 
+/**
+ * Fetch the lesson body in a TTS-friendly form (4B.2).
+ *
+ * The audio button prefers `audio_url` (a pre-generated MP3) and
+ * falls back to the Web Speech API on the lesson body. This action
+ * returns the raw body so the client can do the markdown → plain
+ * text conversion locally (we don't want the server to be in the
+ * speech loop — it just hands over the text).
+ */
+export async function getLessonForAudio(
+  lessonId: string
+): Promise<{ data?: { title: string; body: string }; error?: string }> {
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const supabase = auth.supabase;
+
+  if (!lessonId) return { error: 'lessonId is required' };
+
+  const { data, error } = await supabase
+    .from('lessons')
+    .select('title, body_md')
+    .eq('id', lessonId)
+    .eq('is_published', true)
+    .maybeSingle();
+
+  if (error) return { error: error.message };
+  if (!data) return { error: 'Lesson not found' };
+
+  return {
+    data: {
+      title: (data as { title: string }).title,
+      body: (data as { body_md: string }).body_md,
+    },
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Main action: generatePersonalizedQuiz
 // ─────────────────────────────────────────────────────────────────────

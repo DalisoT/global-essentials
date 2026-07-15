@@ -37,6 +37,46 @@ export function Markdown({ source }: { source: string }): ReactNode {
   return <div className="prose-tactical space-y-4">{blocks.map((b, i) => renderBlock(b, i))}</div>;
 }
 
+/**
+ * Extract a plain-text version of a markdown body. Used by the audio
+ * narration client (4B.2) so it has something to read aloud that
+ * doesn't include markdown noise like `**`, `#`, `[text](url)`, etc.
+ *
+ * Stripped:
+ *   - Headings prefixes (#, ##, ###)
+ *   - List bullets (- or * or "1.")
+ *   - Code fences and inline backticks
+ *   - Bold/italic markers (* and _)
+ *   - Link syntax — keep the label, drop the URL
+ *   - Blockquote prefixes (>)
+ *   - Multiple whitespace and newlines collapse to a single space.
+ *
+ * Intentionally lossy and short — the goal is "readable by TTS",
+ * not "perfect roundtrip".
+ */
+export function markdownToPlainText(source: string): string {
+  return source
+    // Remove fenced code blocks entirely.
+    .replace(/```[\s\S]*?```/g, ' ')
+    // Strip heading markers.
+    .replace(/^#{1,6}\s+/gm, '')
+    // Strip blockquote markers.
+    .replace(/^>\s*/gm, '')
+    // Strip list bullets / ordered-list numbers.
+    .replace(/^\s*(?:[-*]|\d+\.)\s+/gm, '')
+    // Replace link syntax with just the label.
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    // Drop inline backticks.
+    .replace(/`/g, '')
+    // Drop bold markers.
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    // Drop italic markers (single * and single _).
+    .replace(/[*_]([^*_]+)[*_]/g, '$1')
+    // Collapse whitespace.
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Block parsing
 // ─────────────────────────────────────────────────────────────────────

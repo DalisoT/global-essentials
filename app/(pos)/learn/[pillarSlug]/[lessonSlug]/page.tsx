@@ -8,10 +8,11 @@ import {
   getUserLessonProgress,
 } from '@/lib/actions/learn';
 import { resolvePillarIcon, pillarColorClasses } from '@/lib/learn/pillar-ui';
-import { Markdown } from '@/lib/learn/markdown';
+import { Markdown, markdownToPlainText } from '@/lib/learn/markdown';
 import { TakeQuizButton } from '@/components/learn/TakeQuizButton';
 import { LessonProgressTracker } from '@/components/learn/LessonProgressTracker';
 import { LessonBookmarkButton } from '@/components/learn/LessonBookmarkButton';
+import { LessonAudioButton } from '@/components/learn/LessonAudioButton';
 import type { Lesson, LessonResource } from '@/lib/supabase-types';
 
 /**
@@ -126,6 +127,17 @@ export default async function LessonPage({
             </div>
             {/* 4D.2 — bookmark button */}
             <LessonBookmarkButton lessonId={lesson.id} initialBookmarked={initialBookmarked} />
+          </div>
+
+          {/* 4B.2 — audio narration (Listen button). Uses pre-generated
+              audio_url when present, otherwise Web Speech fallback. */}
+          <div className="pt-1">
+            <LessonAudioButton
+              audioUrl={lesson.audio_url ?? null}
+              bodyText={markdownToPlainText(lesson.body_md)}
+              lessonTitle={lesson.title}
+              colorClass={`${color.bg} border ${color.border} ${color.icon}`}
+            />
           </div>
 
           {/* Take quiz button (client) */}
