@@ -26,7 +26,7 @@
 import groq from '@/lib/groq';
 import { requireAuth } from '@/lib/supabase-server';
 import { LESSON_QUIZ_DAILY_LIMIT } from '@/lib/config';
-import { lessonQuiz } from '@/lib/ai/prompts';
+import { lessonQuiz, lessonExamples } from '@/lib/ai/prompts';
 import type { QuizDataContext } from '@/lib/ai/prompts/lesson-quiz';
 import { cfoToolHandlers } from '@/lib/ai/cfo-tools';
 import { getDashboardStats } from '@/lib/actions/dashboard';
@@ -786,6 +786,300 @@ export async function getLessonForAudio(
       body: (data as { body_md: string }).body_md,
     },
   };
+}
+
+/**
+ * Rewrite a lesson body with the user's real business numbers
+ * injected in place of generic examples (4B.3).
+ *
+ * Reuses the same data-gathering logic as `generatePersonalizedQuiz`.
+ * The data flags come from the lesson's `requires_data` column.
+ *
+ * Rate limit: a separate counter from quizzes — we use 'lesson_examples'
+ * as the ai_usage route, with the same `LESSON_QUIZ_DAILY_LIMIT` cap
+ * (they share a budget since both are "AI on a lesson" calls). The
+ * constant name is a leftover from before 4B.3; a future cleanup can
+ * rename it to `LESSON_AI_DAILY_LIMIT` without breaking behaviour.
+ *
+ * Returns the original body unchanged when the lesson doesn't ask
+ * for any data (`requires_data` is empty) — there's nothing to inject.
+ */
+export async function generateLessonExamples(
+  lessonId: string
+): Promise<{
+  data?: {
+    rewrittenBody: string;
+    highlights: Array<{ label: string; value: string }>;
+    usage: { promptTokens: number; completionTokens: number; totalTokens: number };
+    cached: boolean;
+  };
+  error?: string;
+}> {
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const { supabase, userId } = auth;
+
+  if (!lessonId) return { error: 'lessonId is required' };
+
+  // Rate limit (shares the lesson-quiz budget — both routes are
+  // 'AI on a lesson' calls).
+  if (LESSON_QUIZ_DAILY_LIMIT > 0) {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const { count, error: countError } = await supabase
+      .from('ai_usage')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .in('route', ['lesson_quiz', 'lesson_examples'])
+      .gte('created_at', startOfDay.toISOString());
+
+    if (!countError && (count ?? 0) >= LESSON_QUIZ_DAILY_LIMIT) {
+      return {
+        error: `Daily lesson-AI limit reached (${LESSON_QUIZ_DAILY_LIMIT}/day). Resets at midnight. Adjust LESSON_QUIZ_DAILY_LIMIT in lib/config.ts if you need more.`,
+      };
+    }
+  }
+
+  // Load the lesson (full body this time — we need to rewrite it).
+  const { data: lesson, error: lessonError } = await supabase
+    .from('lessons')
+    .select('id, title, body_md, requires_data, is_published')
+    .eq('id', lessonId)
+    .single();
+
+  if (lessonError || !lesson) {
+    return { error: lessonError?.message || 'Lesson not found' };
+  }
+  if (!(lesson as { is_published: boolean }).is_published) {
+    return { error: 'Lesson is not published' };
+  }
+
+  const safeLesson = lesson as unknown as {
+    id: string;
+    title: string;
+    body_md: string;
+    requires_data: string[];
+    is_published: boolean;
+  };
+
+  const flags = safeLesson.requires_data ?? [];
+
+  // Fast path: no data flags means there's nothing to inject.
+  if (flags.length === 0) {
+    return {
+      data: {
+        rewrittenBody: safeLesson.body_md,
+        highlights: [],
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        cached: false,
+      },
+    };
+  }
+
+  // Gather the data the lesson needs. Same gatherers as the quiz
+  // action — we keep them duplicated rather than abstracted so the
+  // two actions stay independently readable.
+  const dataContext: QuizDataContext = {};
+  const gatherers: Array<Promise<void>> = [];
+
+  if (flags.includes('sales')) {
+    gatherers.push(
+      (async () => {
+        const stats = await getDashboardStats();
+        if (stats.data) {
+          dataContext.sales = {
+            groundTruth: stats.data.groundTruth,
+            inPipeline: stats.data.inPipeline,
+            recentSalesCount: stats.data.recentSales?.length ?? 0,
+          };
+        }
+      })()
+    );
+  }
+  if (flags.includes('profitability')) {
+    gatherers.push(
+      (async () => {
+        const result = await cfoToolHandlers.get_top_products(supabase, {
+          preset: 'month',
+          limit: 10,
+        });
+        if (result.ok) dataContext.profitability = result.data;
+      })()
+    );
+  }
+  if (flags.includes('debts')) {
+    gatherers.push(
+      (async () => {
+        const result = await cfoToolHandlers.get_aging_debts(supabase, {});
+        if (result.ok) dataContext.debts = result.data;
+      })()
+    );
+  }
+  if (flags.includes('inventory')) {
+    gatherers.push(
+      (async () => {
+        const result = await cfoToolHandlers.get_slow_moving_stock(supabase, {
+          limit: 20,
+        });
+        if (result.ok) dataContext.inventory = result.data;
+      })()
+    );
+  }
+  if (flags.includes('expenses')) {
+    gatherers.push(
+      (async () => {
+        const result = await cfoToolHandlers.get_pnl(supabase, {
+          preset: 'month',
+        });
+        if (result.ok) dataContext.expenses = result.data;
+      })()
+    );
+  }
+  if (flags.includes('journal')) {
+    gatherers.push(
+      (async () => {
+        const result = await cfoToolHandlers.get_pnl(supabase, {
+          preset: 'month',
+        });
+        if (result.ok) dataContext.journal = result.data;
+      })()
+    );
+  }
+
+  await Promise.all(gatherers);
+
+  // Call Groq.
+  let response;
+  try {
+    response = await groq.chat.completions.create({
+      messages: [
+        { role: 'system', content: lessonExamples.system },
+        {
+          role: 'user',
+          content: lessonExamples.buildUserMessage({
+            lessonTitle: safeLesson.title,
+            lessonBody: safeLesson.body_md,
+            requiresData: flags,
+            data: dataContext,
+          }),
+        },
+      ],
+      model: lessonExamples.meta.model,
+      temperature: lessonExamples.meta.temperature,
+      max_tokens: lessonExamples.meta.maxTokens,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('[generateLessonExamples] Groq error:', msg);
+    return { error: `Couldn't reach the AI (${msg}). Please try again.` };
+  }
+
+  const usage = {
+    promptTokens: response.usage?.prompt_tokens ?? 0,
+    completionTokens: response.usage?.completion_tokens ?? 0,
+    totalTokens: response.usage?.total_tokens ?? 0,
+  };
+
+  // Parse the response.
+  const content = response.choices[0]?.message?.content?.trim() || '';
+  const parsed = parseExamplesResponse(content);
+
+  if (!parsed.rewrittenBody) {
+    return {
+      error:
+        "The AI returned a rewrite I couldn't parse. Please try again — the model occasionally adds prose that breaks the JSON.",
+    };
+  }
+
+  // Best-effort ai_usage write.
+  supabase
+    .from('ai_usage')
+    .insert([{
+      user_id: userId,
+      route: 'lesson_examples',
+      prompt_tokens: usage.promptTokens,
+      completion_tokens: usage.completionTokens,
+      total_tokens: usage.totalTokens,
+      model: lessonExamples.meta.model,
+    }])
+    .then(({ error }) => {
+      if (error) console.warn('[generateLessonExamples] ai_usage insert failed:', error.message);
+    });
+
+  // Best-effort audit_log write.
+  supabase
+    .from('audit_log')
+    .insert([{
+      user_id: userId,
+      action: 'lesson.examples_generate',
+      entity_type: 'lesson',
+      entity_id: safeLesson.id,
+      metadata: {
+        lessonTitle: safeLesson.title,
+        highlights: parsed.highlights.length,
+        dataFlags: flags,
+        totalTokens: usage.totalTokens,
+      },
+    }])
+    .then(({ error }) => {
+      if (error) console.warn('[generateLessonExamples] audit_log insert failed:', error.message);
+    });
+
+  return {
+    data: {
+      rewrittenBody: parsed.rewrittenBody,
+      highlights: parsed.highlights,
+      usage,
+      cached: false,
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Examples response parser
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Pull { rewrittenBody, highlights } out of the model's free-form text.
+ * Defensive against markdown fences, prose, and trailing commas.
+ */
+function parseExamplesResponse(content: string): {
+  rewrittenBody: string;
+  highlights: Array<{ label: string; value: string }>;
+} {
+  const cleaned = content
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```\s*$/, '')
+    .trim();
+
+  const objMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (!objMatch) return { rewrittenBody: '', highlights: [] };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(objMatch[0]);
+  } catch {
+    return { rewrittenBody: '', highlights: [] };
+  }
+
+  if (!parsed || typeof parsed !== 'object') return { rewrittenBody: '', highlights: [] };
+  const o = parsed as Record<string, unknown>;
+
+  const body = typeof o.rewrittenBody === 'string' ? o.rewrittenBody : '';
+  const rawHighlights = Array.isArray(o.highlights) ? o.highlights : [];
+  const highlights: Array<{ label: string; value: string }> = [];
+  for (const h of rawHighlights) {
+    if (!h || typeof h !== 'object') continue;
+    const hh = h as Record<string, unknown>;
+    if (typeof hh.label !== 'string' || typeof hh.value !== 'string') continue;
+    highlights.push({
+      label: hh.label.slice(0, 80),
+      value: hh.value.slice(0, 80),
+    });
+    if (highlights.length >= 5) break;
+  }
+
+  return { rewrittenBody: body, highlights };
 }
 
 // ─────────────────────────────────────────────────────────────────────

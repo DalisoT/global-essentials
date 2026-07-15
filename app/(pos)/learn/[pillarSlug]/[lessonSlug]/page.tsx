@@ -13,6 +13,7 @@ import { TakeQuizButton } from '@/components/learn/TakeQuizButton';
 import { LessonProgressTracker } from '@/components/learn/LessonProgressTracker';
 import { LessonBookmarkButton } from '@/components/learn/LessonBookmarkButton';
 import { LessonAudioButton } from '@/components/learn/LessonAudioButton';
+import { PersonalizedExamplesButton } from '@/components/learn/PersonalizedExamplesButton';
 import type { Lesson, LessonResource } from '@/lib/supabase-types';
 
 /**
@@ -139,6 +140,18 @@ export default async function LessonPage({
               colorClass={`${color.bg} border ${color.border} ${color.icon}`}
             />
           </div>
+
+          {/* 4B.3 — personalised examples (only on lessons that opt-in
+              via requires_data). The button only appears when the
+              lesson's body has numbers the AI could inject. */}
+          {lesson.requires_data && lesson.requires_data.length > 0 && (
+            <div className="pt-1">
+              <PersonalizedExamplesButton
+                lessonId={lesson.id}
+                colorClass={`${color.bg} border ${color.border} ${color.icon}`}
+              />
+            </div>
+          )}
 
           {/* Take quiz button (client) */}
           <div className="pt-1">

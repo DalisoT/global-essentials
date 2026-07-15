@@ -160,8 +160,9 @@ Operations & Scaling
       pre-generated `audio_url` column on lessons is preserved as the
       upgrade path when the user later wants to invest in ElevenLabs
       / OpenAI TTS)
-- [ ] **4B.3.** Server action `generateLessonExamples(lessonId)` — fetches
+- [x] **4B.3.** Server action `generateLessonExamples(lessonId)` — fetches
       real numbers from your DB and injects them into the lesson body
+      (uncached in v1; per-(lesson, data-hash) cache is a follow-up)
 
 ## 4C — UI
 
