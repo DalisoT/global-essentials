@@ -234,11 +234,11 @@ Operations & Scaling
 
 - [x] **7.1.** Migration: `forecasts` table (id, kind, target_id, horizon_days,
       payload JSONB, generated_at, model_version)
-- [ ] **7.2.** Server action `forecastDemand(productId, days)` — simple
+- [x] **7.2.** Server action `forecastDemand(productId, days)` — simple
       moving-average baseline first; Prophet/ARIMA later if data depth allows
-- [ ] **7.3.** Server action `forecastCashFlow(days)` — based on installment
+- [x] **7.3.** Server action `forecastCashFlow(days)` — based on installment
       schedule + sales velocity
-- [ ] **7.4.** Server action `predictDefaults(clientId)` — probability of
+- [x] **7.4.** Server action `predictDefaults(clientId)` — probability of
       next-installment default based on history
 - [ ] **7.5.** UI: Forecast widget on dashboard with "next 30 days cash"
       sparkline
