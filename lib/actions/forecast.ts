@@ -356,8 +356,8 @@ export async function computeCashflowForecast(
   horizonEnd.setDate(horizonEnd.getDate() + days);
   const { data: installments, error: instError } = await supabase
     .from('installments')
-    .select('amount_due, due_date, status')
-    .neq('status', 'paid')
+    .select('amount_due, due_date, is_paid')
+    .eq('is_paid', false)
     .gte('due_date', today.toISOString().slice(0, 10))
     .lte('due_date', horizonEnd.toISOString().slice(0, 10));
 
@@ -438,16 +438,16 @@ export async function computeDefaultRiskForecast(
 
   const { data: installments, error: instError } = await supabase
     .from('installments')
-    .select('amount_due, amount_paid, due_date, status, paid_at')
+    .select('amount_due, amount_paid, due_date, is_paid, paid_at')
     .eq('client_id', clientId);
 
   if (instError) return { error: instError.message };
 
   const rows = (installments ?? []) as Array<{
     amount_due: number;
-    amount_paid?: number;
+    amount_paid?: number | null;
     due_date: string;
-    status: string;
+    is_paid?: boolean;
     paid_at?: string | null;
   }>;
 
@@ -461,7 +461,7 @@ export async function computeDefaultRiskForecast(
     const due = new Date(r.due_date);
     const msPerDay = 1000 * 60 * 60 * 24;
     const daysOverdue = Math.floor((now.getTime() - due.getTime()) / msPerDay);
-    if (r.status === 'paid' && r.paid_at && daysOverdue <= 0) {
+    if (r.is_paid === true && r.paid_at && daysOverdue <= 0) {
       onTimeCount += 1;
     } else if (daysOverdue > 90) {
       overdue90 += 1;
