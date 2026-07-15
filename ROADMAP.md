@@ -178,8 +178,9 @@ Operations & Scaling
 
 - [x] **4D.1.** Track read-time per lesson (scroll depth); persist progress
 - [x] **4D.2.** Add "Bookmarks" feature (save lessons to revisit)
-- [ ] **4D.3.** Add daily-streak reminder push (opt-in, uses
-      `usePushNotifications` hook that already exists)
+- [x] **4D.3.** Add daily-streak reminder nudge (sonner toast, mounted in
+      (pos) layout — fires once per day before noon for users with a
+      2+ day streak who haven't completed anything today)
 
 ---
 

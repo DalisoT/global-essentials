@@ -505,6 +505,114 @@ export async function toggleBookmark(
   return { data: { bookmarked: nextBookmarked } };
 }
 
+/**
+ * Compute the user's current completion streak + a few related stats
+ * (used by 4C.6 "celebration" UI and 4D.3 "daily reminder" nudge).
+ *
+ * A "day" is defined by the user's local timezone (we use Africa/Lusaka
+ * explicitly because the app is Zambia-only and server time may be UTC).
+ * The streak is the count of consecutive days ending today (or yesterday
+ * if the user hasn't read anything yet today) on which the user
+ * completed at least one lesson. Streak breaks if a day was skipped.
+ *
+ * Returns:
+ *   - streakDays: 0 if no completions ever, otherwise the consecutive-
+ *     day count.
+ *   - completedToday: true if the user has any completion dated today.
+ *   - lastCompletedAt: ISO timestamp of the most recent completion, or
+ *     null if none.
+ *   - totalCompleted: total number of lessons ever completed.
+ */
+export async function getStreakSummary(): Promise<{
+  data?: {
+    streakDays: number;
+    completedToday: boolean;
+    lastCompletedAt: string | null;
+    totalCompleted: number;
+  };
+  error?: string;
+}> {
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const { supabase, userId } = auth;
+
+  // We fetch just the completion timestamps — the only field we need
+  // to compute the streak. We sort descending so the most recent is
+  // first; that's where the streak walk starts.
+  const { data, error } = await supabase
+    .from('user_lesson_progress')
+    .select('completed_at')
+    .eq('user_id', userId)
+    .not('completed_at', 'is', null)
+    .order('completed_at', { ascending: false });
+
+  if (error) return { error: error.message };
+
+  const rows = (data ?? []) as Array<{ completed_at: string }>;
+  const totalCompleted = rows.length;
+  if (totalCompleted === 0) {
+    return {
+      data: {
+        streakDays: 0,
+        completedToday: false,
+        lastCompletedAt: null,
+        totalCompleted: 0,
+      },
+    };
+  }
+
+  // Convert each completion to its local-date string in Africa/Lusaka.
+  // We use Intl.DateTimeFormat with the timeZone option so DST and
+  // offset changes don't matter (Zambia is GMT+2 year-round, so this
+  // is mostly belt-and-braces).
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Lusaka',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const localDate = (iso: string) => fmt.format(new Date(iso)); // YYYY-MM-DD
+
+  // Distinct local dates, descending.
+  const dateSet = new Set<string>();
+  for (const r of rows) dateSet.add(localDate(r.completed_at));
+  const datesDesc = Array.from(dateSet).sort((a, b) => (a < b ? 1 : -1));
+  const lastCompletedAt = rows[0]?.completed_at ?? null;
+
+  // Today in the user's timezone.
+  const todayStr = fmt.format(new Date());
+  const completedToday = dateSet.has(todayStr);
+
+  // Walk backwards from today (or yesterday if not done today) day
+  // by day, counting consecutive completions.
+  const [tY, tM, tD] = todayStr.split('-').map(Number);
+  const startDate = new Date(Date.UTC(tY, tM - 1, tD));
+  // If the user hasn't completed anything today, the streak still
+  // counts as long as the most recent day was yesterday. We start
+  // from yesterday in that case to allow "you still have time today".
+  if (!completedToday) startDate.setUTCDate(startDate.getUTCDate() - 1);
+
+  let streakDays = 0;
+  for (let i = 0; i < dateSet.size + 5; i++) {
+    const key = fmt.format(startDate);
+    if (dateSet.has(key)) {
+      streakDays += 1;
+      startDate.setUTCDate(startDate.getUTCDate() - 1);
+    } else {
+      break;
+    }
+  }
+
+  return {
+    data: {
+      streakDays,
+      completedToday,
+      lastCompletedAt,
+      totalCompleted,
+    },
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Main action: generatePersonalizedQuiz
 // ─────────────────────────────────────────────────────────────────────
