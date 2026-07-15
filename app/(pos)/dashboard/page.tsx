@@ -5,6 +5,7 @@ import { getTodaysLesson } from '@/lib/actions/learn';
 import DailyInsightsWidget from './DailyInsights';
 import { AskCfoChip } from '@/components/dashboard/AskCfoChip';
 import { TodaysLessonWidget } from '@/components/learn/TodaysLessonWidget';
+import { ForecastWidget } from '@/components/dashboard/ForecastWidget';
 import { formatCurrency } from '@/lib/utils';
 import {
   TrendingUp,
@@ -139,6 +140,14 @@ export default async function DashboardPage() {
           />
         </div>
       )}
+
+      {/* Forecast (7.5) — 30-day cash projection */}
+      <div className="space-y-3">
+        <h2 className="text-sm font-bold uppercase tracking-wider text-white/60">
+          Predictive
+        </h2>
+        <ForecastWidget days={30} />
+      </div>
 
       {/* Quick Actions */}
       <div className="space-y-3">

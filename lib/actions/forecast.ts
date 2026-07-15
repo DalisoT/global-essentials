@@ -509,5 +509,7 @@ async function upsertForecast(
   return { data: data as Forecast };
 }
 
-// Re-export TTL for the cron (7.8) to reference.
-export const FORECAST_TTL_DAYS_EXPORT = FORECAST_TTL_DAYS;
+// FORECAST_TTL_DAYS is referenced by the nightly cron (7.8) — it
+// should hardcode or import from a non-'use server' file. We
+// intentionally do not re-export it from this module because the
+// 'use server' directive forbids non-async exports.

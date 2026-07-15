@@ -240,7 +240,7 @@ Operations & Scaling
       schedule + sales velocity
 - [x] **7.4.** Server action `predictDefaults(clientId)` — probability of
       next-installment default based on history
-- [ ] **7.5.** UI: Forecast widget on dashboard with "next 30 days cash"
+- [x] **7.5.** UI: Forecast widget on dashboard with "next 30 days cash"
       sparkline
 - [ ] **7.6.** UI: Per-product forecast card in inventory page
 - [ ] **7.7.** Smart reorder alert: combine forecast + supplier lead time +
