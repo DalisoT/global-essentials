@@ -9,6 +9,8 @@ export interface Product {
   category_id: string | null;
   is_visible_in_catalog?: boolean;
   catalog_price?: number | null;
+  /** Phase 7.7 — days from order placement to supplier delivery. */
+  lead_time_days?: number;
   created_at: string;
   updated_at: string;
 }

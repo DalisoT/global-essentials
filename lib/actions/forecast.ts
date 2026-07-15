@@ -513,3 +513,100 @@ async function upsertForecast(
 // should hardcode or import from a non-'use server' file. We
 // intentionally do not re-export it from this module because the
 // 'use server' directive forbids non-async exports.
+
+// ─────────────────────────────────────────────────────────────────────
+// 7.7 — getReorderAlerts()
+//
+// Scans the user's active products, fetches each product's cached
+// 30-day demand forecast, and returns the ones where the current
+// stock will run out BEFORE the supplier lead time + safety buffer.
+// These are the products the owner should reorder now.
+//
+// Algorithm:
+//   - avg_daily = total predicted qty over 30 days / 30
+//   - days_until_stockout = current_stock / avg_daily
+//   - safety_buffer_days = 7
+//   - reorder_needed = days_until_stockout < lead_time_days + safety_buffer
+//
+// We only include products with at least some sales history
+// (avg_daily > 0) so dead stock doesn't pollute the list.
+// ─────────────────────────────────────────────────────────────────────
+
+const REORDER_HORIZON_DAYS = 30;
+const REORDER_SAFETY_BUFFER_DAYS = 7;
+
+export interface ReorderAlert {
+  productId: string;
+  productName: string;
+  currentStock: number;
+  leadTimeDays: number;
+  avgDailyDemand: number;
+  daysUntilStockout: number; // Infinity for products with no demand
+  /** Suggested reorder quantity: (lead_time + safety_buffer) * avg_daily. */
+  suggestedOrderQty: number;
+  /** Forecast method label, for transparency. */
+  methodLabel: string;
+}
+
+export async function getReorderAlerts(): Promise<{
+  data?: ReorderAlert[];
+  error?: string;
+}> {
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const { supabase } = auth;
+
+  // 1) Pull all active products with their stock + lead time.
+  const { data: products, error: productsError } = await supabase
+    .from('products')
+    .select('id, name, stock_level, lead_time_days')
+    .is('deleted_at', null)
+    .order('name', { ascending: true });
+
+  if (productsError) return { error: productsError.message };
+  if (!products || products.length === 0) return { data: [] };
+
+  type ProductRow = {
+    id: string;
+    name: string;
+    stock_level: number;
+    lead_time_days: number | null;
+  };
+
+  // 2) For each product, fetch the cached 30-day demand forecast.
+  //    Sequential because the underlying cache hit is fast and the
+  //    list is small (~tens of products typically). We could
+  //    parallelise later if needed.
+  const alerts: ReorderAlert[] = [];
+  for (const p of products as ProductRow[]) {
+    const leadTime = p.lead_time_days ?? 7;
+    const forecastRes = await forecastDemand(p.id, REORDER_HORIZON_DAYS);
+    if (forecastRes.error || !forecastRes.data) continue;
+    const payload = forecastRes.data.payload as unknown as DemandForecastPayload;
+    const totalPredicted = payload.series.reduce((a, b) => a + b.predicted_qty, 0);
+    const avgDaily = totalPredicted / REORDER_HORIZON_DAYS;
+    if (avgDaily <= 0) continue; // dead stock, skip
+
+    const daysUntilStockout = p.stock_level / avgDaily;
+    const reorderThreshold = leadTime + REORDER_SAFETY_BUFFER_DAYS;
+    if (daysUntilStockout >= reorderThreshold) continue;
+
+    const suggestedOrderQty = Math.ceil(reorderThreshold * avgDaily);
+
+    alerts.push({
+      productId: p.id,
+      productName: p.name,
+      currentStock: p.stock_level ?? 0,
+      leadTimeDays: leadTime,
+      avgDailyDemand: r2(avgDaily),
+      daysUntilStockout: r2(daysUntilStockout),
+      suggestedOrderQty,
+      methodLabel: payload.method_label,
+    });
+  }
+
+  // 3) Sort: most urgent first (fewest days until stockout).
+  alerts.sort((a, b) => a.daysUntilStockout - b.daysUntilStockout);
+
+  return { data: alerts };
+}

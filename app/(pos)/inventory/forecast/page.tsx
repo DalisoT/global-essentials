@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { ArrowLeft, Sparkles } from 'lucide-react';
 import { requireAuth } from '@/lib/supabase-server';
 import { ForecastListRow } from '@/components/inventory/ForecastListRow';
+import { ReorderAlertsPanel } from '@/components/inventory/ReorderAlertsPanel';
 
 /**
  * Per-product demand forecast page (Phase 7 / 7.6).
@@ -70,6 +71,9 @@ export default async function InventoryForecastPage() {
           30-day moving average · click each product to predict demand
         </p>
       </div>
+
+      {/* 7.7 — Smart reorder alerts */}
+      <ReorderAlertsPanel />
 
       {/* Table */}
       <div className="card-tactical overflow-hidden p-0">
