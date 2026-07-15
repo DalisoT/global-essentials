@@ -23,3 +23,4 @@ export * as dailyInsights from './daily-insights';
 export * as cfoSystem from './cfo-system';
 export * as lessonQuiz from './lesson-quiz';
 export * as lessonExamples from './lesson-examples';
+export * as productDescription from './product-description';

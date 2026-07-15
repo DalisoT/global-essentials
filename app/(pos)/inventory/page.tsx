@@ -7,6 +7,7 @@ import { getInventory, createProduct, updateProduct, deleteProduct } from '@/lib
 import { formatCurrency } from '@/lib/utils';
 import { Package, Plus, X, Pencil, Trash2, Search, ImagePlus, Upload, XCircle, ChevronLeft, ChevronRight, Eye, EyeOff, Sparkles } from 'lucide-react';
 import Link from 'next/link';
+import { ProductDescriptionField } from '@/components/inventory/ProductDescriptionField';
 import { cn } from '@/lib/utils';
 import type { Product } from '@/lib/supabase-types';
 import { Skeleton, SkeletonCard, EmptyState } from '@/components/ui/Skeleton';
@@ -31,6 +32,7 @@ function InventoryContent() {
   const [catalogPrice, setCatalogPrice] = useState('');
   const [isVisibleInCatalog, setIsVisibleInCatalog] = useState(true);
   const [stockLevel, setStockLevel] = useState('');
+  const [description, setDescription] = useState('');
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
@@ -78,6 +80,7 @@ function InventoryContent() {
     setCatalogPrice('');
     setIsVisibleInCatalog(true);
     setStockLevel('');
+    setDescription('');
     setImageUrls([]);
     setImageFiles([]);
     imagePreviews.forEach((url) => URL.revokeObjectURL(url));
@@ -98,6 +101,7 @@ function InventoryContent() {
     setCatalogPrice(product.catalog_price?.toString() || '');
     setIsVisibleInCatalog(product.is_visible_in_catalog ?? true);
     setStockLevel(product.stock_level.toString());
+    setDescription(product.description ?? '');
     const existingUrls = product.image_urls && product.image_urls.length > 0
       ? product.image_urls
       : product.image_url
@@ -145,6 +149,7 @@ function InventoryContent() {
       image_urls: finalImageUrls.length > 0 ? finalImageUrls : undefined,
       is_visible_in_catalog: isVisibleInCatalog,
       catalog_price: catalogPrice ? parseFloat(catalogPrice) : null,
+      description: description.trim() || null,
     };
 
     const { error } = editingProduct
@@ -475,6 +480,20 @@ function InventoryContent() {
                     className="w-full h-14 px-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/40 focus:outline-none focus:border-tactical-blue"
                   />
                 </div>
+                {/* 8.1 — AI-assisted product description */}
+                <div className="col-span-2">
+                  <ProductDescriptionField
+                    productId={editingProduct?.id}
+                    name={name}
+                    categoryName={null}
+                    sellingPrice={sellingPrice ? parseFloat(sellingPrice) : null}
+                    costPrice={costPrice ? parseFloat(costPrice) : null}
+                    stockLevel={stockLevel ? parseInt(stockLevel) : null}
+                    description={description}
+                    onChange={setDescription}
+                  />
+                </div>
+
                 <div className="flex flex-col justify-end">
                   <label className="text-xs font-bold uppercase tracking-wider text-white/60 mb-2 block">
                     Visible in Catalog

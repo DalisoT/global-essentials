@@ -11,6 +11,8 @@ export interface Product {
   catalog_price?: number | null;
   /** Phase 7.7 — days from order placement to supplier delivery. */
   lead_time_days?: number;
+  /** Phase 8.1 — public catalog long-form description (Groq-generated, human-edited). */
+  description?: string | null;
   created_at: string;
   updated_at: string;
 }

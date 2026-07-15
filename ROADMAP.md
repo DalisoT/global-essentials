@@ -254,8 +254,8 @@ Operations & Scaling
 
 > Make the public catalog smarter. Still Zambia-only.
 
-- [ ] **8.1.** Auto-generate product descriptions with Groq from
-      name + category + image (review/edit before publish)
+- [x] **8.1.** Auto-generate product descriptions with Groq from
+      name + category + price (review/edit before publish)
 - [ ] **8.2.** Visual search — Groq vision model matches uploaded photo to
       inventory
 - [ ] **8.3.** "You may also like" — purchase-history co-occurrence
