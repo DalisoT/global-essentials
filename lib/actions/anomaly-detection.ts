@@ -37,6 +37,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceRoleClient } from '@/lib/supabase-server';
+import { getMemorySnapshot } from '@/lib/ai/memory';
 import type { AIRecommendation } from '@/lib/supabase-types';
 
 const BASELINE_DAYS = 30;
@@ -415,10 +416,21 @@ export interface DetectAnomaliesResult {
 export async function detectAnomalies(
   supabase: SupabaseClient
 ): Promise<DetectAnomaliesResult> {
+  // 9.6 — load the user's engagement profile for 'anomaly' so
+  // we can de-prioritise (or promote) rows based on history.
+  const memory = await getMemorySnapshot();
+  const memoryPriority = memory.priorityFor('anomaly');
+
   const anomalies = await computeAnomalies(supabase);
   let inserted = 0;
   let updated = 0;
-  for (const a of anomalies) {
+  for (let a of anomalies) {
+    // Blend: if the user has consistently ignored anomalies
+    // (memoryPriority='low') and the heuristic isn't already
+    // screaming 'high', demote to 'low' so the inbox doesn't
+    // fill with noise. Conversely, if the user engages a
+    // lot, promote 'medium' → 'high'.
+    a = { ...a, priority: blendPriority(a.priority, memoryPriority) };
     const r = await persistAnomaly(supabase, a);
     if (r.error) {
       return {
@@ -440,6 +452,37 @@ export async function detectAnomalies(
     inserted,
     updated,
   };
+}
+
+const PRIORITY_ORDER: Record<'low' | 'medium' | 'high', number> = {
+  low: 0,
+  medium: 1,
+  high: 2,
+};
+function reversePriority(n: number): 'low' | 'medium' | 'high' {
+  return n === 0 ? 'low' : n === 1 ? 'medium' : 'high';
+}
+/**
+ * Blend the heuristic priority with the memory's hint.
+ *   - If heuristic is 'high' we keep it (don't suppress real signals).
+ *   - Otherwise we take the max of (heuristic, memoryHint) so the
+ *     memory can promote, but only demote when the heuristic is
+ *     already 'low' or 'medium' AND the memory says 'low'.
+ * Effectively: memory is a soft ceiling when the user is
+ * disengaged, and a soft floor when the user is engaged.
+ */
+function blendPriority(
+  heuristic: 'low' | 'medium' | 'high',
+  memory: 'low' | 'medium' | 'high'
+): 'low' | 'medium' | 'high' {
+  if (heuristic === 'high') return 'high';
+  const h = PRIORITY_ORDER[heuristic];
+  const m = PRIORITY_ORDER[memory];
+  // Take the higher of the two unless memory says 'low' AND
+  // heuristic is 'medium' — then demote to 'low' (engagement
+  // override).
+  if (memory === 'low' && heuristic === 'medium') return 'low';
+  return reversePriority(Math.max(h, m));
 }
 
 /**

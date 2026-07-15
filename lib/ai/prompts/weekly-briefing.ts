@@ -67,7 +67,9 @@ Rules:
   (mention the lull) — don't omit the section.
 - order: revenue → expenses → top movers → alerts → look-ahead
   (only include the last two if there is something meaningful).
-- Output ONLY the JSON object. No prose, no fences.`;
+- Output ONLY the JSON object. No prose, no fences.
+
+{{MEMORY}}`;
 
 export interface WeeklyBriefingInput {
   weekStartISO: string;       // e.g. "2026-07-13"

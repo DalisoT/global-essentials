@@ -36,6 +36,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { requireAuth, createServiceRoleClient } from '@/lib/supabase-server';
+import { getMemorySnapshot } from '@/lib/ai/memory';
 import type {
   AIRecommendation,
   Goal,
@@ -450,6 +451,11 @@ export async function syncGoalProgressRecs(
     .eq('is_active', true);
   if (gError) return { ok: false, updated: 0, message: gError.message };
 
+  // 9.6 — load the engagement profile for 'goal_progress' so
+  // we can de-prioritise the rows the user ignores.
+  const memory = await getMemorySnapshot();
+  const memoryPriority = memory.priorityFor('goal_progress');
+
   let updated = 0;
   for (const g of (goals ?? []) as Goal[]) {
     const current_value = await computeCurrentValue(supabase, g);
@@ -470,7 +476,8 @@ export async function syncGoalProgressRecs(
       needed_per_day,
       on_track: current_value >= g.target_amount,
     };
-    const rec = buildGoalProgressRec(progress);
+    let rec = buildGoalProgressRec(progress);
+    rec = { ...rec, priority: blendGoalPriority(rec.priority, memoryPriority) };
 
     // Upsert: natural key (kind='goal_progress', related_id=goalId).
     const { data: existing } = await supabase
@@ -529,3 +536,24 @@ export async function runGoalProgressCron(): Promise<{ ok: boolean; updated: num
 
 // Reference AIRecommendation so the import is consumed.
 export type { AIRecommendation };
+
+const GOAL_PRIORITY_ORDER: Record<'low' | 'medium' | 'high', number> = {
+  low: 0,
+  medium: 1,
+  high: 2,
+};
+function goalReversePriority(
+  n: number,
+): 'low' | 'medium' | 'high' {
+  return n === 0 ? 'low' : n === 1 ? 'medium' : 'high';
+}
+function blendGoalPriority(
+  heuristic: 'low' | 'medium' | 'high',
+  memory: 'low' | 'medium' | 'high',
+): 'low' | 'medium' | 'high' {
+  if (heuristic === 'high') return 'high';
+  const h = GOAL_PRIORITY_ORDER[heuristic];
+  const m = GOAL_PRIORITY_ORDER[memory];
+  if (memory === 'low' && heuristic === 'medium') return 'low';
+  return goalReversePriority(Math.max(h, m));
+}

@@ -30,6 +30,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import groq from '@/lib/groq';
 import { weeklyBriefing } from '@/lib/ai/prompts';
+import { buildMemoryPromptBlock } from '@/lib/ai/memory';
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import type { AIRecommendation } from '@/lib/supabase-types';
 
@@ -302,10 +303,16 @@ async function callBriefingModel(
     highPriorityRecsCount: snapshot.highPriorityRecsCount,
   });
 
+  // 9.6 — inject the user's 60-day engagement profile into
+  // the system prompt. If there's no history yet, this is a
+  // no-op.
+  const memoryBlock = await buildMemoryPromptBlock();
+  const systemPrompt = weeklyBriefing.system.replace('{{MEMORY}}', memoryBlock);
+
   try {
     const response = await groq.chat.completions.create({
       messages: [
-        { role: 'system', content: weeklyBriefing.system },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
       ],
       model: weeklyBriefing.meta.model,
