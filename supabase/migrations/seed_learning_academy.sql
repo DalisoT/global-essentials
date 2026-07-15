@@ -278,7 +278,7 @@ INSERT INTO lesson_resources (id, lesson_id, label, href, kind, display_order) V
   ('a1b2c3d4-9005-4000-a000-000000000005', 'a1b2c3d4-2001-4000-a000-000000000001',
    'Ask the AI CFO about top sellers', '/cfo?prefill=Which%20products%20are%20my%20top%20sellers%20this%20month%2C%20and%20what%20%25%20of%20my%20revenue%20do%20they%20represent%3F', 'internal', 1),
   -- Dead stock → AI CFO
-  ('a1b2c3d4-9006-4000-a000-000000000006', 'a1b2c3d4-3002-4000-a000-000000000003',
+  ('a1b2c3d4-9006-4000-a000-000000000006', 'a1b2c3d4-3002-4000-a000-000000000002',
    'Ask the AI CFO about dead stock', '/cfo?prefill=Which%20products%20are%20dead%20stock%20I%20should%20discount%3F', 'internal', 1),
   -- Unit economics → Profitability
   ('a1b2c3d4-9007-4000-a000-000000000007', 'a1b2c3d4-3003-4000-a000-000000000003',
