@@ -167,9 +167,9 @@ interface CachedLookup {
     : never;
 }
 
-async function getCachedForecast(
+export async function getCachedForecast(
   supabase: CachedLookup['supabase'],
-  kind: 'demand' | 'cashflow' | 'default_risk',
+  kind: 'demand' | 'cashflow' | 'default_risk' | 'review_summary',
   targetId: string | null,
   horizonDays: number
 ): Promise<Forecast | null> {
@@ -192,14 +192,14 @@ async function getCachedForecast(
 }
 
 interface UpsertInput {
-  kind: 'demand' | 'cashflow' | 'default_risk';
+  kind: 'demand' | 'cashflow' | 'default_risk' | 'review_summary';
   target_id: string | null;
   horizon_days: number;
   payload: Record<string, unknown>;
   model: string;
 }
 
-async function upsertForecast(
+export async function upsertForecast(
   supabase: CachedLookup['supabase'],
   input: UpsertInput
 ): Promise<{ data?: Forecast; error?: string }> {
@@ -532,7 +532,7 @@ export async function computeDefaultRiskForecast(
  */
 export async function forceRegenerateForecast(
   supabase: SupabaseClient,
-  kind: 'demand' | 'cashflow' | 'default_risk',
+  kind: 'demand' | 'cashflow' | 'default_risk' | 'review_summary',
   targetId: string | null,
   horizonDays: number
 ): Promise<{ data?: Forecast; error?: string }> {

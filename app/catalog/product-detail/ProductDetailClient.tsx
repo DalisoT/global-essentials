@@ -15,9 +15,12 @@ interface ProductDetailClientProps {
   catalogProducts?: CatalogProductWithImages[];
   reviews?: ProductReview[];
   ratingStats?: { average: number; count: number };
+  /** 8.6 — pre-rendered review summary card. Renders above the
+   *  raw review list. Server-rendered by the page wrapper. */
+  reviewSummary?: React.ReactNode;
 }
 
-export function ProductDetailClient({ product, relatedProducts = [], catalogProducts = [], reviews: initialReviews = [], ratingStats: initialStats }: ProductDetailClientProps) {
+export function ProductDetailClient({ product, relatedProducts = [], catalogProducts = [], reviews: initialReviews = [], ratingStats: initialStats, reviewSummary }: ProductDetailClientProps) {
   const [showAdded, setShowAdded] = useState(false);
   const [reviews, setReviews] = useState<ProductReview[]>(initialReviews);
   const [ratingStats, setRatingStats] = useState(initialStats || { average: 0, count: 0 });
@@ -336,6 +339,9 @@ export function ProductDetailClient({ product, relatedProducts = [], catalogProd
             </div>
           </motion.div>
         )}
+
+        {/* 8.6 — AI summary (server-rendered, above the raw list) */}
+        {reviewSummary}
 
         {/* Review List */}
         {reviews.length > 0 ? (

@@ -35,8 +35,8 @@
 
 CREATE TABLE IF NOT EXISTS forecasts (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  -- 'demand' | 'cashflow' | 'default_risk'
-  kind            TEXT NOT NULL CHECK (kind IN ('demand', 'cashflow', 'default_risk')),
+  -- 'demand' | 'cashflow' | 'default_risk' | 'review_summary'
+  kind            TEXT NOT NULL CHECK (kind IN ('demand', 'cashflow', 'default_risk', 'review_summary')),
   -- NULL for business-wide forecasts (cashflow). For 'demand' this
   -- is products.id; for 'default_risk' this is clients.id. No FK
   -- because the referenced table depends on `kind`.

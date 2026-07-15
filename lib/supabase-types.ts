@@ -177,7 +177,7 @@ export interface LessonWithProgress extends Lesson {
 // ─────────────────────────────────────────────────────────────────────
 
 /** Discriminator for what kind of forecast a row represents. */
-export type ForecastKind = 'demand' | 'cashflow' | 'default_risk';
+export type ForecastKind = 'demand' | 'cashflow' | 'default_risk' | 'review_summary';
 
 /**
  * One row in the `forecasts` table. The shape of `payload` depends
@@ -253,6 +253,21 @@ export interface DefaultRiskForecastPayload {
   }>;
   /** Optional short AI-generated recommendation. */
   recommendation?: string;
+}
+
+/** Review-summary payload — Groq-distilled themes from the reviews. */
+export interface ReviewSummaryPayload {
+  /** 1-2 sentence overall sentiment ('overwhelmingly positive', 'mixed', etc). */
+  overall: string;
+  /** Top themes mentioned across the reviews, in order of frequency. */
+  themes: Array<{
+    label: string; // 1-3 words
+    sentiment: 'positive' | 'negative' | 'mixed';
+  }>;
+  /** Up to 3 verbatim quotes (1-2 sentences each). */
+  quotes: string[];
+  /** How many reviews were summarised into this. */
+  reviewCount: number;
 }
 
 export interface DashboardStats {

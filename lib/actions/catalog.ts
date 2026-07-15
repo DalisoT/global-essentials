@@ -2,7 +2,9 @@
 
 import { createServerSupabaseClient, requireAuth } from '@/lib/supabase-server';
 import groq from '@/lib/groq';
-import { productDescription, visualSearch, catalogChat } from '@/lib/ai/prompts';
+import { productDescription, visualSearch, catalogChat, reviewSummary } from '@/lib/ai/prompts';
+import { getCachedForecast, upsertForecast } from '@/lib/actions/forecast';
+import type { ReviewSummaryPayload } from '@/lib/supabase-types';
 
 export interface CatalogProductWithImages {
   id: string;
@@ -804,4 +806,200 @@ export async function askCatalog(input: CatalogChatInput): Promise<{ data?: Cata
     { role: 'assistant', content: reply },
   ];
   return { data: { message: reply, history: newHistory } };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Phase 8.6 — summarizeReviews
+// ─────────────────────────────────────────────────────────────────────
+
+export interface ReviewSummaryResult {
+  payload: ReviewSummaryPayload;
+  cached: boolean;
+}
+
+/**
+ * Summarise the approved reviews for a product. Cached in the
+ * existing `forecasts` table with `kind = 'review_summary'` and
+ * a 1-day TTL. The cache check + UPSERT mirrors the pattern from
+ * 7.2-7.4.
+ *
+ * Public — the product detail page is anonymous, so review
+ * summaries are too. Rate limiting lives at the catalog side.
+ *
+ * Edge cases:
+ *   - 0 approved reviews: returns an "no reviews" summary (we
+ *     never call Groq).
+ *   - 1-2 reviews: still summarises, but themes / quotes are
+ *     shorter. Quotes are validated against the source.
+ */
+export async function summarizeReviews(
+  productId: string
+): Promise<{ data?: ReviewSummaryResult; error?: string }> {
+  if (!productId) return { error: 'productId is required' };
+
+  const supabase = await createServerSupabaseClient();
+
+  // 1) Cache check. The forecast table uses (kind, target_id,
+  //    horizon_days) as the natural key; for review summaries we
+  //    pin horizon_days = 1.
+  const cached = await getCachedForecast(supabase, 'review_summary', productId, 1);
+  if (cached) {
+    return {
+      data: {
+        payload: cached.payload as unknown as ReviewSummaryPayload,
+        cached: true,
+      },
+    };
+  }
+
+  // 2) Fetch the product (we need the name for the prompt).
+  const { data: product, error: productError } = await supabase
+    .from('products')
+    .select('name')
+    .eq('id', productId)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (productError) return { error: productError.message };
+  if (!product) return { error: 'Product not found' };
+
+  // 3) Fetch the approved reviews.
+  const { data: reviewRows, error: reviewsError } = await supabase
+    .from('product_reviews')
+    .select('rating, comment, customer_name')
+    .eq('product_id', productId)
+    .eq('is_approved', true)
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  if (reviewsError) return { error: reviewsError.message };
+
+  const reviews = (reviewRows ?? []) as Array<{
+    rating: number;
+    comment: string | null;
+    customer_name: string;
+  }>;
+
+  // 4) Empty-state short circuit.
+  if (reviews.length === 0) {
+    const emptyPayload: ReviewSummaryPayload = {
+      overall: 'No reviews yet — be the first to share your experience.',
+      themes: [],
+      quotes: [],
+      reviewCount: 0,
+    };
+    return upsertForecast(supabase, {
+      kind: 'review_summary',
+      target_id: productId,
+      horizon_days: 1,
+      payload: emptyPayload as unknown as Record<string, unknown>,
+      model: 'empty-state',
+    }).then((res) => {
+      if (res.error) return { error: res.error };
+      return { data: { payload: emptyPayload, cached: false } };
+    });
+  }
+
+  // 5) Call Groq.
+  let response;
+  try {
+    response = await groq.chat.completions.create({
+      messages: [
+        { role: 'system', content: reviewSummary.system },
+        {
+          role: 'user',
+          content: reviewSummary.buildUserMessage({
+            productName: (product as { name: string }).name,
+            reviews: reviews.map((r) => ({
+              rating: r.rating,
+              comment: r.comment,
+              reviewerName: r.customer_name,
+            })),
+          }),
+        },
+      ],
+      model: reviewSummary.meta.model,
+      temperature: reviewSummary.meta.temperature,
+      max_tokens: reviewSummary.meta.maxTokens,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { error: `Couldn't reach the AI (${msg}). Please try again.` };
+  }
+
+  // 6) Parse + validate the JSON.
+  const content = response.choices[0]?.message?.content?.trim() || '';
+  const parsed = parseReviewSummaryResponse(content, reviews);
+  if (!parsed.overall) {
+    return { error: "The AI returned a summary I couldn't parse. Please try again." };
+  }
+
+  return upsertForecast(supabase, {
+    kind: 'review_summary',
+    target_id: productId,
+    horizon_days: 1,
+    payload: parsed as unknown as Record<string, unknown>,
+    model: reviewSummary.meta.model,
+  }).then((res) => {
+    if (res.error) return { error: res.error };
+    return { data: { payload: parsed, cached: false } };
+  });
+}
+
+function parseReviewSummaryResponse(
+  content: string,
+  sourceReviews: Array<{ comment: string | null }>
+): ReviewSummaryPayload {
+  const cleaned = content
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```\s*$/, '')
+    .trim();
+
+  const objMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (!objMatch) return { overall: '', themes: [], quotes: [], reviewCount: 0 };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(objMatch[0]);
+  } catch {
+    return { overall: '', themes: [], quotes: [], reviewCount: 0 };
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    return { overall: '', themes: [], quotes: [], reviewCount: 0 };
+  }
+  const o = parsed as Record<string, unknown>;
+
+  const overall = typeof o.overall === 'string' ? o.overall.slice(0, 1000) : '';
+  const rawThemes = Array.isArray(o.themes) ? o.themes : [];
+  const themes: ReviewSummaryPayload['themes'] = [];
+  for (const t of rawThemes) {
+    if (!t || typeof t !== 'object') continue;
+    const tt = t as Record<string, unknown>;
+    if (typeof tt.label !== 'string') continue;
+    const sent = tt.sentiment;
+    const sentiment: 'positive' | 'negative' | 'mixed' =
+      sent === 'positive' || sent === 'negative' || sent === 'mixed' ? sent : 'mixed';
+    themes.push({ label: tt.label.slice(0, 60), sentiment });
+    if (themes.length >= 5) break;
+  }
+
+  // Validate quotes: must be VERBATIM substrings of one of the
+  // source review comments. Anything the model paraphrased or
+  // invented gets dropped silently — better to show 1 honest
+  // quote than 3 made-up ones.
+  const sourceComments = sourceReviews
+    .map((r) => r.comment?.trim())
+    .filter((c): c is string => !!c && c.length > 0);
+  const rawQuotes = Array.isArray(o.quotes) ? o.quotes : [];
+  const quotes: string[] = [];
+  for (const q of rawQuotes) {
+    if (typeof q !== 'string') continue;
+    const trimmed = q.trim();
+    if (trimmed.length < 8 || trimmed.length > 300) continue;
+    // Must be a substring of at least one source comment.
+    if (sourceComments.some((c) => c.includes(trimmed))) {
+      quotes.push(trimmed);
+    }
+    if (quotes.length >= 3) break;
+  }
+
+  return { overall, themes, quotes, reviewCount: sourceReviews.length };
 }

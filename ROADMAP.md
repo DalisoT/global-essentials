@@ -263,7 +263,7 @@ Operations & Scaling
       WhatsApp link helper)
 - [x] **8.5.** Order status workflow UI (pending → confirmed → packed →
       shipped → delivered) — schema half-done in `create_online_store_tables`
-- [ ] **8.6.** Review summaries — Groq summarizes reviews per product
+- [x] **8.6.** Review summaries — Groq summarizes reviews per product
 
 ---
 

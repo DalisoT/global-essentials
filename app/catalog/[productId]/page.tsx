@@ -9,6 +9,7 @@ import { ProductDetailClient } from '../product-detail/ProductDetailClient';
 import { TrackView } from '@/components/catalog/TrackView';
 import { CartDrawer } from '@/components/cart/CartDrawer';
 import { CatalogChatWidget } from '@/components/catalog/CatalogChatWidget';
+import { ReviewSummaryCard } from '@/components/catalog/ReviewSummaryCard';
 import type { CatalogProductWithImages } from '@/lib/actions/catalog';
 
 export const dynamic = 'force-dynamic';
@@ -78,7 +79,16 @@ export default async function ProductPage({ params }: ProductPageProps) {
         <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black to-transparent" />
       </motion.div>
 
-      <ProductDetailClient product={typedProduct} relatedProducts={relatedProducts} catalogProducts={allProducts || []} reviews={reviews || []} ratingStats={ratingStats} />
+      <ProductDetailClient
+        product={typedProduct}
+        relatedProducts={relatedProducts}
+        catalogProducts={allProducts || []}
+        reviews={reviews || []}
+        ratingStats={ratingStats}
+        // 8.6 — pre-rendered review summary card. Server-rendered
+        // so the Groq call (cached) doesn't ship to the client.
+        reviewSummary={<ReviewSummaryCard productId={productId} />}
+      />
       <CartDrawer />
       {/* 8.4 — floating catalog chatbot. Mounted on the product
           page with the product's id + name so the chat knows what

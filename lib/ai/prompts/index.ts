@@ -26,3 +26,4 @@ export * as lessonExamples from './lesson-examples';
 export * as productDescription from './product-description';
 export * as visualSearch from './visual-search';
 export * as catalogChat from './catalog-chat';
+export * as reviewSummary from './review-summary';
