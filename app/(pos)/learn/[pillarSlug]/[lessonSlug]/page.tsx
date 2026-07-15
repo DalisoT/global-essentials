@@ -5,22 +5,31 @@ import {
   getLessonBySlug,
   getLessonResources,
   getPillarBySlug,
+  getUserLessonProgress,
 } from '@/lib/actions/learn';
 import { resolvePillarIcon, pillarColorClasses } from '@/lib/learn/pillar-ui';
 import { Markdown } from '@/lib/learn/markdown';
 import { TakeQuizButton } from '@/components/learn/TakeQuizButton';
+import { LessonProgressTracker } from '@/components/learn/LessonProgressTracker';
 import type { Lesson, LessonResource } from '@/lib/supabase-types';
 
 /**
- * Learning Academy — lesson reader (Phase 4 / 4C.3).
+ * Learning Academy — lesson reader (Phase 4 / 4C.3 + 4D.1).
  *
  * Server component. Renders:
  *   1. Back link → pillar lesson list
  *   2. Breadcrumb: Pillar › Lesson title
  *   3. Lesson header (title, est_minutes, "Take quiz" button)
  *   4. Markdown body (small inline renderer — see lib/learn/markdown.tsx)
- *   5. "Apply to your business" — list of lesson_resources as buttons
- *   6. "Take quiz" — the TakeQuizButton client component (4B.1)
+ *   5. <LessonProgressTracker /> — invisible client component that
+ *      tracks scroll depth + foreground read time and auto-marks
+ *      the lesson complete (4D.1).
+ *   6. "Apply to your business" — list of lesson_resources as buttons
+ *   7. "Take quiz" — the TakeQuizButton client component (4B.1)
+ *
+ * The tracker needs to be inside the page so it can read scroll
+ * events; we render it at the bottom of the article so the "Mark
+ * as read" button sits where the user naturally finishes.
  *
  * Audio playback (4B.2) and the lesson-completion celebration
  * (4C.6) are intentionally NOT in this commit — they land later
@@ -52,6 +61,14 @@ export default async function LessonPage({
   const lesson = lessonResult.data as Lesson & { pillar?: { slug: string; name: string; color: string | null; icon: string | null } };
 
   const { data: resources } = await getLessonResources(lesson.id);
+
+  // 4D.1 — fetch the user's prior progress for this lesson so the
+  // tracker can resume from where they left off and won't re-trigger
+  // the auto-complete for already-finished lessons.
+  const { data: progress } = await getUserLessonProgress(lesson.id);
+  const initialCompleted = !!progress?.completedAt;
+  const initialReadSeconds = progress?.readSeconds ?? 0;
+  const initialScrollDepthPct = progress?.scrollDepthPct ?? 0;
 
   const Icon = resolvePillarIcon(lesson.pillar?.icon ?? pillar.icon);
   const color = pillarColorClasses(lesson.pillar?.color ?? pillar.color);
@@ -117,6 +134,15 @@ export default async function LessonPage({
       <article className="card-tactical">
         <Markdown source={lesson.body_md} />
       </article>
+
+      {/* 4D.1 — read-time tracker. Lives at the bottom of the article
+          so the manual "Mark as read" button sits where users finish. */}
+      <LessonProgressTracker
+        lessonId={lesson.id}
+        initialCompleted={initialCompleted}
+        initialReadSeconds={initialReadSeconds}
+        initialScrollDepthPct={initialScrollDepthPct}
+      />
 
       {/* Apply to your business — lesson_resources */}
       {resources && resources.length > 0 && (

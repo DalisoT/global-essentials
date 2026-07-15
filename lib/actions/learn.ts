@@ -259,6 +259,157 @@ export async function markQuizCompleted(
   return { data: { score: Math.round(score) } };
 }
 
+/**
+ * Update per-user read progress for a lesson (4D.1).
+ *
+ * Used by the LessonProgressTracker client component. Called frequently
+ * (debounced on the client) to record:
+ *   - scrollDepthPct: the deepest position the user has scrolled to (0-100).
+ *     We MAX() with the existing value so progress never goes backwards.
+ *   - readSeconds: seconds the lesson was in the foreground. We ADD to
+ *     the existing value so the same lesson visit adds up over time.
+ *   - completed: if true, set completed_at to now() (only if not already
+ *     set — we never clear a completion).
+ *   - last_seen_at: always updated to now().
+ *
+ * If a row doesn't exist yet, this creates one. If it does, it merges
+ * the deltas (not overwrites). Idempotent under retries.
+ */
+export async function updateLessonProgress(
+  lessonId: string,
+  progress: {
+    scrollDepthPct?: number;
+    readSeconds?: number;
+    completed?: boolean;
+  }
+): Promise<{ data?: { completed: boolean; completedAt: string | null }; error?: string }> {
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const { supabase, userId } = auth;
+
+  if (!lessonId) return { error: 'lessonId is required' };
+
+  // Fetch the existing progress (if any) so we can do the MAX/ADD merge
+  // client-side. A single SELECT before the UPSERT is fine — read-time
+  // tracking is low-frequency (debounced on the client).
+  const { data: existing } = await supabase
+    .from('user_lesson_progress')
+    .select('scroll_depth_pct, read_seconds, completed_at, bookmarked')
+    .eq('user_id', userId)
+    .eq('lesson_id', lessonId)
+    .maybeSingle();
+
+  const current = (existing as {
+    scroll_depth_pct?: number;
+    read_seconds?: number;
+    completed_at?: string | null;
+    bookmarked?: boolean;
+  } | null) ?? {};
+
+  const mergedScroll =
+    progress.scrollDepthPct != null
+      ? Math.max(100, Math.max(current.scroll_depth_pct ?? 0, progress.scrollDepthPct))
+      : (current.scroll_depth_pct ?? 0);
+  const mergedSeconds =
+    progress.readSeconds != null
+      ? (current.read_seconds ?? 0) + Math.max(0, Math.floor(progress.readSeconds))
+      : (current.read_seconds ?? 0);
+  // Cap to sane values.
+  const finalScroll = Math.max(0, Math.min(100, mergedScroll));
+  const finalSeconds = Math.max(0, mergedSeconds);
+
+  // Completion is sticky: once set, never cleared. We only set it
+  // when the caller explicitly asks, AND it's not already set.
+  const wantsComplete = progress.completed === true && !current.completed_at;
+  const completedAt = wantsComplete
+    ? new Date().toISOString()
+    : (current.completed_at ?? null);
+
+  const { data: upserted, error } = await supabase
+    .from('user_lesson_progress')
+    .upsert(
+      {
+        user_id: userId,
+        lesson_id: lessonId,
+        scroll_depth_pct: finalScroll,
+        read_seconds: finalSeconds,
+        completed_at: completedAt,
+        bookmarked: current.bookmarked ?? false,
+        last_seen_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,lesson_id' }
+    )
+    .select('completed_at')
+    .single();
+
+  if (error) return { error: error.message };
+  const completedAtOut = (upserted as { completed_at?: string | null } | null)?.completed_at ?? null;
+  return { data: { completed: !!completedAtOut, completedAt: completedAtOut } };
+}
+
+/**
+ * Fetch the user's progress for a single lesson. Used by 4C.5 to
+ * decide which lesson to surface as "Today's lesson" and by 4D.2
+ * to know if a lesson is bookmarked.
+ */
+export async function getUserLessonProgress(
+  lessonId: string
+): Promise<{
+  data?: {
+    scrollDepthPct: number;
+    readSeconds: number;
+    completedAt: string | null;
+    bookmarked: boolean;
+    quizScore: number | null;
+  } | null;
+  error?: string;
+}> {
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const supabase = auth.supabase;
+
+  const { data, error } = await supabase
+    .from('user_lesson_progress')
+    .select('scroll_depth_pct, read_seconds, completed_at, bookmarked, quiz_score')
+    .eq('user_id', auth.userId)
+    .eq('lesson_id', lessonId)
+    .maybeSingle();
+
+  if (error) return { error: error.message };
+  if (!data) return { data: null };
+
+  const row = data as {
+    scroll_depth_pct?: number;
+    read_seconds?: number;
+    completed_at?: string | null;
+    bookmarked?: boolean;
+    quiz_score?: number | null;
+  };
+  return {
+    data: {
+      scrollDepthPct: row.scroll_depth_pct ?? 0,
+      readSeconds: row.read_seconds ?? 0,
+      completedAt: row.completed_at ?? null,
+      bookmarked: row.bookmarked ?? false,
+      quizScore: row.quiz_score ?? null,
+    },
+  };
+}
+
+/**
+ * Mark a lesson as read unconditionally. Used by the "Mark as read"
+ * button on the lesson reader (4D.1 manual fallback when the
+ * auto-detection misses). Sets `completed_at` if not already set;
+ * otherwise no-ops. Returns the final completed state.
+ */
+export async function markLessonRead(
+  lessonId: string
+): Promise<{ data?: { completed: boolean; completedAt: string | null }; error?: string }> {
+  // Reuse updateLessonProgress with completed: true. It already
+  // enforces the sticky-once-completed rule.
+  return updateLessonProgress(lessonId, { completed: true });
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Main action: generatePersonalizedQuiz
 // ─────────────────────────────────────────────────────────────────────
