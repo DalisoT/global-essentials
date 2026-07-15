@@ -232,7 +232,7 @@ Operations & Scaling
 
 > Forward-looking intelligence using historical journal + sales data.
 
-- [ ] **7.1.** Migration: `forecasts` table (id, kind, target_id, horizon_days,
+- [x] **7.1.** Migration: `forecasts` table (id, kind, target_id, horizon_days,
       payload JSONB, generated_at, model_version)
 - [ ] **7.2.** Server action `forecastDemand(productId, days)` — simple
       moving-average baseline first; Prophet/ARIMA later if data depth allows
