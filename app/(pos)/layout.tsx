@@ -49,6 +49,9 @@ const secondaryNav = [
   // Learning Academy (Phase 4) — surface it right after AI CFO so the
   // two flagship features sit together at the top of the drawer.
   { href: '/learn', label: 'Learning Academy', icon: GraduationCap },
+  // Orders (Phase 8) — surface high in the drawer because
+  // fulfil-now actions matter most.
+  { href: '/orders', label: 'Orders', icon: Package },
   { href: '/inventory', label: 'Inventory', icon: Package },
   { href: '/expenses', label: 'Expenses', icon: Wallet },
   { href: '/analytics', label: 'Analytics', icon: TrendingUp },

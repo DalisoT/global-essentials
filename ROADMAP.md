@@ -261,7 +261,7 @@ Operations & Scaling
 - [x] **8.3.** "You may also like" — purchase-history co-occurrence
 - [x] **8.4.** AI chatbot on catalog with WhatsApp handoff (already have
       WhatsApp link helper)
-- [ ] **8.5.** Order status workflow UI (pending → confirmed → packed →
+- [x] **8.5.** Order status workflow UI (pending → confirmed → packed →
       shipped → delivered) — schema half-done in `create_online_store_tables`
 - [ ] **8.6.** Review summaries — Groq summarizes reviews per product
 

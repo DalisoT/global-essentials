@@ -216,3 +216,49 @@ export async function updateOrderStatus(
 
   return { error: null };
 }
+
+/**
+ * Set the shipping tracking number for an order. Separate from
+ * updateOrderStatus because it's a different concern (the courier
+ * number, not the workflow state). The action also auto-advances
+ * the order to 'shipped' if it's currently in a pre-ship state,
+ * since you usually have a tracking number because the order went
+ * out the door.
+ */
+export async function setOrderTracking(
+  orderId: string,
+  tracking: string
+): Promise<{ error: string | null }> {
+  const trimmed = tracking.trim();
+  if (!trimmed) return { error: 'Tracking number is required' };
+  if (trimmed.length > 200) {
+    return { error: 'Tracking number is too long (max 200 chars)' };
+  }
+  const supabase = await createServerSupabaseClient();
+
+  // Fetch current status so we can decide whether to advance.
+  const { data: current } = await supabase
+    .from('orders')
+    .select('status')
+    .eq('id', orderId)
+    .maybeSingle();
+  const status = (current as { status: string } | null)?.status;
+
+  const updates: Record<string, unknown> = {
+    shipping_tracking: trimmed,
+    updated_at: new Date().toISOString(),
+  };
+  // If the order is still pre-shipped and we just got a tracking
+  // number, advance to 'shipped'. Don't downgrade if it's later.
+  if (status && (status === 'pending' || status === 'confirmed' || status === 'processing')) {
+    updates.status = 'shipped';
+  }
+
+  const { error } = await supabase
+    .from('orders')
+    .update(updates)
+    .eq('id', orderId);
+
+  if (error) return { error: error.message };
+  return { error: null };
+}
