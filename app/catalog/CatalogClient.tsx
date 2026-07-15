@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { MessageCircle, Phone, Star, Search, Heart, ArrowRight, X } from 'lucide-react';
+import { MessageCircle, Phone, Star, Search, Heart, ArrowRight, X, Camera } from 'lucide-react';
 import { AnimatedProductCard } from './AnimatedProductCard';
 import { CartIcon } from '@/components/cart/CartIcon';
 import { CartDrawer } from '@/components/cart/CartDrawer';
@@ -141,6 +141,20 @@ export function CatalogClient({ products, categories }: CatalogClientProps) {
 
       {/* Search and Filter */}
       <section className="container mx-auto px-6 py-4 space-y-4">
+        {/* 8.2 — visual search shortcut */}
+        <Link
+          href="/catalog/visual-search"
+          className="flex items-center justify-between gap-3 p-3 rounded-xl bg-tactical-blue/10 border border-tactical-blue/30 hover:bg-tactical-blue/20 transition-colors"
+        >
+          <div className="flex items-center gap-2.5">
+            <Camera className="w-5 h-5 text-tactical-blue" />
+            <div>
+              <p className="text-sm font-bold text-tactical-blue">Visual search</p>
+              <p className="text-[10px] text-white/50">Upload a photo, find the product</p>
+            </div>
+          </div>
+          <ArrowRight className="w-4 h-4 text-tactical-blue" />
+        </Link>
         {/* Search with autocomplete */}
         <div className="relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30" />

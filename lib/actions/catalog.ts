@@ -2,7 +2,7 @@
 
 import { createServerSupabaseClient, requireAuth } from '@/lib/supabase-server';
 import groq from '@/lib/groq';
-import { productDescription } from '@/lib/ai/prompts';
+import { productDescription, visualSearch } from '@/lib/ai/prompts';
 
 export interface CatalogProductWithImages {
   id: string;
@@ -264,4 +264,192 @@ function parseDescriptionResponse(content: string): ProductDescriptionSuggestion
   const category_label =
     typeof o.category_label === 'string' ? o.category_label.slice(0, 80).trim() : '';
   return { description, highlights, category_label };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Phase 8.2 — visualSearch
+// ─────────────────────────────────────────────────────────────────────
+
+export interface VisualSearchMatch {
+  product: CatalogProductWithImages;
+  /** The model's ranking. 0 = best, higher = worse. */
+  rank: number;
+}
+
+export interface VisualSearchResult {
+  /** Resolved product matches in order of confidence. */
+  matches: VisualSearchMatch[];
+  /** Names the model returned that we couldn't map to a product. */
+  unmatched: string[];
+  /** Echo of the input hint, if any. */
+  hint: string | null;
+}
+
+/**
+ * Visual product search. Accepts an image (as a base64 data URL or
+ * a publicly accessible URL) and returns the top 1-3 catalog
+ * products the model thinks match.
+ *
+ * Public route — no auth required. Catalog browsing is anonymous.
+ *
+ * Image input: either `data:image/jpeg;base64,...` (recommended
+ * for user uploads) or `https://...` (for already-hosted images).
+ *
+ * The model can only return names that exist in the catalog — the
+ * prompt constrains the output space and we do a strict name match
+ * server-side. Anything the model returns that doesn't exist in
+ * the catalog is surfaced in `unmatched` for debugging.
+ */
+export async function searchByImage(input: {
+  imageUrl: string;
+  hint?: string;
+}): Promise<{ data?: VisualSearchResult; error?: string; usage?: { promptTokens: number; completionTokens: number; totalTokens: number } }> {
+  if (!input.imageUrl) return { error: 'imageUrl is required' };
+  // Sanity: the input must look like a data URL or http(s) URL.
+  // Anything else is almost certainly an injection attempt.
+  if (
+    !/^data:image\/(jpeg|png|webp|gif);base64,/i.test(input.imageUrl) &&
+    !/^https?:\/\//i.test(input.imageUrl)
+  ) {
+    return { error: 'imageUrl must be a base64 data URL (image/jpeg, image/png, image/webp, image/gif) or an http(s) URL' };
+  }
+  if (input.hint && input.hint.length > 200) {
+    return { error: 'hint is too long (max 200 chars)' };
+  }
+
+  // 1) Fetch the visible catalog — names only, the model doesn't
+  //    need descriptions / prices for matching.
+  const supabase = await createServerSupabaseClient();
+  const { data: products, error: productsError } = await supabase
+    .from('products')
+    .select('id, name, selling_price, catalog_price, image_url, image_urls, stock_level, description')
+    .eq('is_visible_in_catalog', true)
+    .gt('stock_level', 0)
+    .order('name', { ascending: true })
+    .limit(100); // hard cap; see comment in visual-search.ts prompt
+
+  if (productsError) return { error: productsError.message };
+  if (!products || products.length === 0) {
+    return { data: { matches: [], unmatched: [], hint: input.hint ?? null } };
+  }
+
+  // 2) Call Groq vision.
+  let response;
+  try {
+    response = await groq.chat.completions.create({
+      messages: [
+        { role: 'system', content: visualSearch.system },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: visualSearch.buildUserMessage({
+              productNames: (products as Array<{ name: string }>).map((p) => p.name),
+              hint: input.hint,
+            }) },
+            { type: 'image_url', image_url: { url: input.imageUrl } },
+          ] as Array<{ type: string; text?: string; image_url?: { url: string } }>,
+        },
+      ] as never,
+      model: visualSearch.meta.model,
+      temperature: visualSearch.meta.temperature,
+      max_tokens: visualSearch.meta.maxTokens,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { error: `Couldn't reach the AI (${msg}). Please try again.` };
+  }
+
+  const usage = {
+    promptTokens: response.usage?.prompt_tokens ?? 0,
+    completionTokens: response.usage?.completion_tokens ?? 0,
+    totalTokens: response.usage?.total_tokens ?? 0,
+  };
+
+  // 3) Parse the model's JSON array of names.
+  const content = response.choices[0]?.message?.content?.trim() || '';
+  const matchedNames = parseVisualSearchNames(content);
+
+  // 4) Map names to product rows. Case-insensitive exact match
+  //    first; fall back to a simple includes() for fuzzy matching.
+  const matched: VisualSearchMatch[] = [];
+  const matchedIds = new Set<string>();
+  const unmatched: string[] = [];
+  type ProductRow = {
+    id: string;
+    name: string;
+    selling_price: number;
+    catalog_price?: number | null;
+    image_url: string | null;
+    image_urls: string[] | null;
+    stock_level: number;
+    description?: string | null;
+  };
+  const allRows = (products ?? []) as unknown as ProductRow[];
+  const productsByNameLower = new Map<string, ProductRow>();
+  for (const p of allRows) {
+    productsByNameLower.set(p.name.toLowerCase(), p);
+  }
+  for (let i = 0; i < matchedNames.length; i++) {
+    const name = matchedNames[i];
+    const exact = productsByNameLower.get(name.toLowerCase());
+    let productRow: ProductRow | undefined = exact;
+    if (!productRow) {
+      // Fuzzy: pick the first product whose name contains the
+      // search term OR vice versa.
+      for (const p of allRows) {
+        const pname = p.name.toLowerCase();
+        const lname = name.toLowerCase();
+        if (pname.includes(lname) || lname.includes(pname)) {
+          productRow = p;
+          break;
+        }
+      }
+    }
+    if (productRow && !matchedIds.has(productRow.id)) {
+      matchedIds.add(productRow.id);
+      matched.push({
+        product: {
+          ...productRow,
+          description: productRow.description ?? undefined,
+          selling_price: productRow.catalog_price ?? productRow.selling_price,
+          images: productRow.image_urls && productRow.image_urls.length > 0
+            ? productRow.image_urls
+            : productRow.image_url
+              ? [productRow.image_url]
+              : [],
+        },
+        rank: i,
+      });
+    } else if (!productRow) {
+      unmatched.push(name);
+    }
+    if (matched.length >= 3) break; // Top 3 only.
+  }
+
+  return { data: { matches: matched, unmatched, hint: input.hint ?? null }, usage };
+}
+
+function parseVisualSearchNames(content: string): string[] {
+  const cleaned = content
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```\s*$/, '')
+    .trim();
+  // Find the first JSON array.
+  const arrayMatch = cleaned.match(/\[[\s\S]*\]/);
+  if (!arrayMatch) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(arrayMatch[0]);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  const out: string[] = [];
+  for (const item of parsed) {
+    if (typeof item !== 'string') continue;
+    const trimmed = item.trim();
+    if (trimmed && trimmed.length <= 200) out.push(trimmed);
+    if (out.length >= 5) break;
+  }
+  return out;
 }

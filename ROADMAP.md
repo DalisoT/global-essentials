@@ -256,7 +256,7 @@ Operations & Scaling
 
 - [x] **8.1.** Auto-generate product descriptions with Groq from
       name + category + price (review/edit before publish)
-- [ ] **8.2.** Visual search — Groq vision model matches uploaded photo to
+- [x] **8.2.** Visual search — Groq vision model matches uploaded photo to
       inventory
 - [ ] **8.3.** "You may also like" — purchase-history co-occurrence
 - [ ] **8.4.** AI chatbot on catalog with WhatsApp handoff (already have
