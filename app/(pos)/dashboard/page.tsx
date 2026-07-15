@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { getDashboardStats } from '@/lib/actions/dashboard';
 import { getDailyInsights } from '@/lib/actions/insights';
 import DailyInsightsWidget from './DailyInsights';
+import { AskCfoChip } from '@/components/dashboard/AskCfoChip';
 import { formatCurrency } from '@/lib/utils';
 import {
   TrendingUp,
@@ -250,35 +251,5 @@ export default async function DashboardPage() {
         </div>
       )}
     </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// Per-card "Ask AI" chip (3B.5)
-//
-// Small button overlaid on each dashboard metric card. Clicking it takes
-// the user to /cfo with a context-aware question pre-filled in the chat
-// input. The cfo page reads `?prefill=...` on mount and seeds the input.
-//
-// `small` is for the smaller cards (In Pipeline, Low Stock) where we
-// only have room for the icon. The big Ground Truth card gets the icon
-// + "Ask AI" label.
-//
-// The chip stops click propagation so it doesn't double-navigate when
-// the parent card is itself a <Link> (Low Stock → /inventory).
-// ─────────────────────────────────────────────────────────────────────
-
-function AskCfoChip({ prefill, small = false }: { prefill: string; small?: boolean }) {
-  const href = `/cfo?prefill=${encodeURIComponent(prefill)}`;
-  return (
-    <Link
-      href={href}
-      onClick={(e) => e.stopPropagation()}
-      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-tactical-blue/15 text-tactical-blue text-[10px] font-bold uppercase tracking-wider hover:bg-tactical-blue/25 transition-colors"
-      title={prefill}
-    >
-      <Brain className="w-3 h-3" />
-      {!small && <span>Ask AI</span>}
-    </Link>
   );
 }
