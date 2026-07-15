@@ -1,6 +1,7 @@
 import { getCatalogProducts } from '@/lib/actions/catalog';
 import { getCategories } from '@/lib/actions/categories';
 import { CatalogClient } from './CatalogClient';
+import { CatalogChatWidget } from '@/components/catalog/CatalogChatWidget';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,5 +11,10 @@ export default async function CatalogPage() {
     getCategories(),
   ]);
 
-  return <CatalogClient products={products || []} categories={categories || []} />;
+  return (
+    <>
+      <CatalogClient products={products || []} categories={categories || []} />
+      <CatalogChatWidget />
+    </>
+  );
 }

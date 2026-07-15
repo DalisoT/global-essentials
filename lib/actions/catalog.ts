@@ -2,7 +2,7 @@
 
 import { createServerSupabaseClient, requireAuth } from '@/lib/supabase-server';
 import groq from '@/lib/groq';
-import { productDescription, visualSearch } from '@/lib/ai/prompts';
+import { productDescription, visualSearch, catalogChat } from '@/lib/ai/prompts';
 
 export interface CatalogProductWithImages {
   id: string;
@@ -651,4 +651,157 @@ function parseVisualSearchNames(content: string): string[] {
     if (out.length >= 5) break;
   }
   return out;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Phase 8.4 — catalogChat
+// ─────────────────────────────────────────────────────────────────────
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface CatalogChatInput {
+  /** The product(s) the user is currently looking at. */
+  productIds: string[];
+  /** Full chat history. The last entry is the user's latest message. */
+  history: ChatMessage[];
+  /** Optional context the caller wants to surface (e.g. the page
+   *  the user is on). Plain text, will be appended to the system
+   *  prompt as a "Context: ..." line. */
+  contextNote?: string;
+}
+
+export interface CatalogChatResult {
+  message: string;
+  /** Echo of the assistant message, for the caller's history. */
+  history: ChatMessage[];
+}
+
+/**
+ * Public catalog chatbot. No auth — catalog browsing is anonymous.
+ *
+ * The action builds a context from the supplied product IDs
+ * (name, price, stock, description, category) and asks Groq to
+ * answer the user's latest message. The full chat history is
+ * sent so the conversation has memory.
+ *
+ * Soft caps on the history and the products list keep the prompt
+ * small: we limit to the last 12 messages and at most 50 products
+ * (more than enough for a small Zambia retail catalog).
+ */
+export async function askCatalog(input: CatalogChatInput): Promise<{ data?: CatalogChatResult; error?: string }> {
+  if (!Array.isArray(input.history) || input.history.length === 0) {
+    return { error: 'history is required' };
+  }
+  if (input.history.length > 30) {
+    return { error: 'history is too long (max 30 messages)' };
+  }
+  const last = input.history[input.history.length - 1];
+  if (last.role !== 'user' || !last.content.trim()) {
+    return { error: 'last message must be a non-empty user message' };
+  }
+
+  const supabase = await createServerSupabaseClient();
+
+  // 1) Build the product context. If productIds is empty, fall
+  //    back to the full catalog (so the chat can still answer
+  //    "do you have anything for cleaning?").
+  let productRows: Array<{
+    id: string;
+    name: string;
+    selling_price: number;
+    stock_level: number;
+    description?: string | null;
+    category_id?: string | null;
+  }> = [];
+  if (input.productIds.length > 0) {
+    const { data } = await supabase
+      .from('products')
+      .select('id, name, selling_price, stock_level, description, category_id, is_visible_in_catalog, deleted_at')
+      .in('id', input.productIds.slice(0, 50))
+      .eq('is_visible_in_catalog', true)
+      .gt('stock_level', 0)
+      .is('deleted_at', null);
+    productRows = (data ?? []) as typeof productRows;
+  } else {
+    const { data } = await supabase
+      .from('products')
+      .select('id, name, selling_price, stock_level, description, category_id, is_visible_in_catalog, deleted_at')
+      .eq('is_visible_in_catalog', true)
+      .gt('stock_level', 0)
+      .is('deleted_at', null)
+      .order('name', { ascending: true })
+      .limit(50);
+    productRows = (data ?? []) as typeof productRows;
+  }
+
+  // 2) Resolve category names in one query.
+  const categoryIds = Array.from(
+    new Set(productRows.map((p) => p.category_id).filter((id): id is string => !!id))
+  );
+  const categoryNameById = new Map<string, string>();
+  if (categoryIds.length > 0) {
+    const { data: cats } = await supabase
+      .from('categories')
+      .select('id, name')
+      .in('id', categoryIds);
+    for (const c of (cats ?? []) as Array<{ id: string; name: string }>) {
+      categoryNameById.set(c.id, c.name);
+    }
+  }
+
+  const productsForPrompt = productRows.map((p) => ({
+    name: p.name,
+    price: p.selling_price,
+    stock: p.stock_level,
+    description: p.description ?? null,
+    categoryName: p.category_id ? categoryNameById.get(p.category_id) ?? null : null,
+  }));
+
+  // 3) Build the message list. Cap history at the last 12
+  //    messages to keep the prompt small.
+  const recentHistory = input.history.slice(-12);
+  const systemMsg = catalogChat.buildSystemMessage({
+    products: productsForPrompt,
+    history: recentHistory,
+    latestUserMessage: last.content,
+    contextNote: input.contextNote,
+  });
+  const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+    { role: 'system', content: systemMsg },
+    // Older history (without the last user message) goes in as
+    // user/assistant turns. The last user message is implicit at
+    // the end of the conversation; we add it explicitly so the
+    // model always has the freshest context.
+    ...recentHistory.slice(0, -1).map((m) => ({ role: m.role, content: m.content })),
+    { role: 'user', content: last.content },
+  ];
+
+  // 4) Call Groq.
+  let response;
+  try {
+    response = await groq.chat.completions.create({
+      messages: messages as never,
+      model: catalogChat.meta.model,
+      temperature: catalogChat.meta.temperature,
+      max_tokens: catalogChat.meta.maxTokens,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { error: `Couldn't reach the AI (${msg}). Please try again.` };
+  }
+
+  const reply = response.choices[0]?.message?.content?.trim();
+  if (!reply) {
+    return { error: 'The AI returned an empty response. Please try again.' };
+  }
+
+  // 5) Return the new history (caller's history + the assistant reply).
+  const newHistory: ChatMessage[] = [
+    ...recentHistory,
+    { role: 'assistant', content: reply },
+  ];
+  return { data: { message: reply, history: newHistory } };
 }

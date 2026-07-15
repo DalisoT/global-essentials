@@ -25,3 +25,4 @@ export * as lessonQuiz from './lesson-quiz';
 export * as lessonExamples from './lesson-examples';
 export * as productDescription from './product-description';
 export * as visualSearch from './visual-search';
+export * as catalogChat from './catalog-chat';

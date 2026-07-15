@@ -259,7 +259,7 @@ Operations & Scaling
 - [x] **8.2.** Visual search — Groq vision model matches uploaded photo to
       inventory
 - [x] **8.3.** "You may also like" — purchase-history co-occurrence
-- [ ] **8.4.** AI chatbot on catalog with WhatsApp handoff (already have
+- [x] **8.4.** AI chatbot on catalog with WhatsApp handoff (already have
       WhatsApp link helper)
 - [ ] **8.5.** Order status workflow UI (pending → confirmed → packed →
       shipped → delivered) — schema half-done in `create_online_store_tables`
