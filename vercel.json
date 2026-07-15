@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/regenerate-forecasts",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-briefing",
+      "schedule": "0 6 * * 0"
     }
   ]
 }

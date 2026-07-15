@@ -27,3 +27,4 @@ export * as productDescription from './product-description';
 export * as visualSearch from './visual-search';
 export * as catalogChat from './catalog-chat';
 export * as reviewSummary from './review-summary';
+export * as weeklyBriefing from './weekly-briefing';
