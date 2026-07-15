@@ -1,8 +1,10 @@
 import Link from 'next/link';
 import { getDashboardStats } from '@/lib/actions/dashboard';
 import { getDailyInsights } from '@/lib/actions/insights';
+import { getTodaysLesson } from '@/lib/actions/learn';
 import DailyInsightsWidget from './DailyInsights';
 import { AskCfoChip } from '@/components/dashboard/AskCfoChip';
+import { TodaysLessonWidget } from '@/components/learn/TodaysLessonWidget';
 import { formatCurrency } from '@/lib/utils';
 import {
   TrendingUp,
@@ -19,12 +21,14 @@ type SaleWithProductAndClient = Sale & { product?: Product; client?: Client };
 type InstallmentWithSaleAndClient = Installment & { sale?: Sale & { client?: Client } };
 
 export default async function DashboardPage() {
-  const [statsResult, insightsResult] = await Promise.all([
+  const [statsResult, insightsResult, todaysLessonResult] = await Promise.all([
     getDashboardStats(),
     getDailyInsights(),
+    getTodaysLesson(),
   ]);
   const stats = statsResult.data;
   const initialInsights = insightsResult.data;
+  const todaysLesson = todaysLessonResult.data;
 
   if (!stats) {
     return (
@@ -120,6 +124,21 @@ export default async function DashboardPage() {
           </div>
         </Link>
       </div>
+
+      {/* Today's lesson (4C.5) — Learning Academy quick surface */}
+      {todaysLesson && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-white/60">
+            Learning Academy
+          </h2>
+          <TodaysLessonWidget
+            lesson={todaysLesson.lesson}
+            pillar={todaysLesson.pillar}
+            reason={todaysLesson.reason}
+            progressPct={todaysLesson.progressPct}
+          />
+        </div>
+      )}
 
       {/* Quick Actions */}
       <div className="space-y-3">

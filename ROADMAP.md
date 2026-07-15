@@ -170,7 +170,7 @@ Operations & Scaling
       CTA list, "Take quiz" button
 - [x] **4C.4.** Add "Learn" tab to POS bottom nav (will require reshaping the
       5-icon bar to 4 primary + drawer, or scrollable strip)
-- [ ] **4C.5.** Add "Today's lesson" widget to dashboard
+- [x] **4C.5.** Add "Today's lesson" widget to dashboard
 - [ ] **4C.6.** Add lesson-completion celebration (sonner toast + small XP-style
       streak counter on learn home)
 

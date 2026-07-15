@@ -613,6 +613,145 @@ export async function getStreakSummary(): Promise<{
   };
 }
 
+/**
+ * Pick the lesson to surface on the dashboard as "Today's lesson"
+ * (4C.5). The heuristics, in priority order:
+ *
+ *   1. IN-PROGRESS — the lesson with the most recent `last_seen_at`
+ *      that has some read or scroll activity but no `completed_at`.
+ *      This is the "pick up where you left off" case.
+ *   2. NEXT UNREAD — the first published lesson (in display_order) for
+ *      which the user has no progress row at all. This is the
+ *      "fresh pick" case.
+ *   3. FALLBACK — the first published lesson in display_order. Used
+ *      when the user has touched every lesson (e.g. has a row for
+ *      every one but completed all of them).
+ *
+ * Returns `null` only if no published lessons exist in the DB at all.
+ */
+export async function getTodaysLesson(): Promise<{
+  data?: {
+    lesson: Omit<Lesson, 'body_md'>;
+    pillar: Pick<Pillar, 'id' | 'slug' | 'name' | 'color' | 'icon'>;
+    reason: 'in_progress' | 'next_unread' | 'fallback';
+    /** How much progress the user has on this lesson (0-1). */
+    progressPct: number;
+  } | null;
+  error?: string;
+}> {
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const { supabase, userId } = auth;
+
+  // 1) Pull all published lessons (no body_md — we don't need it for
+  //    the widget card). The set is small (14 lessons in the seed).
+  const { data: lessons, error: lessonsError } = await supabase
+    .from('lessons')
+    .select(
+      'id, pillar_id, slug, title, audio_url, est_minutes, display_order, requires_data, is_published, created_at, updated_at'
+    )
+    .eq('is_published', true)
+    .order('display_order', { ascending: true });
+
+  if (lessonsError) return { error: lessonsError.message };
+  if (!lessons || lessons.length === 0) return { data: null };
+
+  // 2) Pull the user's progress for those lessons in one shot.
+  const lessonIds = (lessons as Array<{ id: string }>).map((l) => l.id);
+  const { data: progress, error: progressError } = await supabase
+    .from('user_lesson_progress')
+    .select('lesson_id, scroll_depth_pct, read_seconds, completed_at, last_seen_at')
+    .eq('user_id', userId)
+    .in('lesson_id', lessonIds);
+
+  if (progressError) return { error: progressError.message };
+
+  type ProgressRow = {
+    lesson_id: string;
+    scroll_depth_pct?: number;
+    read_seconds?: number;
+    completed_at?: string | null;
+    last_seen_at?: string;
+  };
+  const progressByLesson = new Map<string, ProgressRow>();
+  for (const row of (progressRowsSafe(progress) as ProgressRow[])) {
+    progressByLesson.set(row.lesson_id, row);
+  }
+
+  // 3) Heuristic 1 — in-progress: scroll > 0 OR read > 0, but
+  //    completed_at is null. Most recent last_seen_at wins.
+  const inProgress = (lessons as unknown as Array<Omit<Lesson, 'body_md'>>)
+    .map((l) => ({ lesson: l, p: progressByLesson.get(l.id) }))
+    .filter(
+      ({ p }) =>
+        p &&
+        !p.completed_at &&
+        ((p.scroll_depth_pct ?? 0) > 0 || (p.read_seconds ?? 0) > 0)
+    )
+    .sort((a, b) => {
+      const at = a.p?.last_seen_at ?? '';
+      const bt = b.p?.last_seen_at ?? '';
+      return at < bt ? 1 : -1;
+    });
+
+  type Result = {
+    lesson: Omit<Lesson, 'body_md'>;
+    pillar: Pick<Pillar, 'id' | 'slug' | 'name' | 'color' | 'icon'>;
+    reason: 'in_progress' | 'next_unread' | 'fallback';
+    progressPct: number;
+  };
+
+  // 4) Heuristic 2 — next unread: no progress row at all.
+  const unread = (lessons as unknown as Array<Omit<Lesson, 'body_md'>>).filter(
+    (l) => !progressByLesson.has(l.id)
+  );
+
+  let pick: Omit<Lesson, 'body_md'> | null = null;
+  let reason: Result['reason'] = 'fallback';
+  let progressPct = 0;
+
+  if (inProgress.length > 0) {
+    pick = inProgress[0].lesson;
+    reason = 'in_progress';
+    const p = inProgress[0].p!;
+    progressPct = Math.max(0, Math.min(1, (p.scroll_depth_pct ?? 0) / 100));
+  } else if (unread.length > 0) {
+    pick = unread[0];
+    reason = 'next_unread';
+    progressPct = 0;
+  } else {
+    pick = (lessons as unknown as Array<Omit<Lesson, 'body_md'>>)[0];
+    reason = 'fallback';
+    progressPct = 1;
+  }
+
+  if (!pick) return { data: null };
+
+  // 5) Look up the pillar for the picked lesson.
+  const { data: pillar, error: pillarError } = await supabase
+    .from('pillars')
+    .select('id, slug, name, color, icon')
+    .eq('id', (pick as { pillar_id: string }).pillar_id)
+    .single();
+
+  if (pillarError || !pillar) return { error: pillarError?.message || 'Pillar not found' };
+
+  return {
+    data: {
+      lesson: pick,
+      pillar: pillar as Pick<Pillar, 'id' | 'slug' | 'name' | 'color' | 'icon'>,
+      reason,
+      progressPct,
+    },
+  };
+}
+
+// progressRowsSafe: narrows the typed-lesson query result so the
+// `for...of` loop above can run without an unknown-cast noise.
+function progressRowsSafe(rows: unknown): unknown[] {
+  return Array.isArray(rows) ? rows : [];
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Main action: generatePersonalizedQuiz
 // ─────────────────────────────────────────────────────────────────────
