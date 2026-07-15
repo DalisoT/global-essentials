@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getProductById, getCatalogProducts } from '@/lib/actions/catalog';
+import { getProductById, getCatalogProducts, getRelatedProducts } from '@/lib/actions/catalog';
 import { getProductReviews, getProductRatingStats } from '@/lib/actions/reviews';
 import { ArrowLeft, MessageCircle, Star } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -18,11 +18,12 @@ interface ProductPageProps {
 
 export default async function ProductPage({ params }: ProductPageProps) {
   const { productId } = await params;
-  const [{ data: product }, { data: allProducts }, { data: reviews }, ratingStats] = await Promise.all([
+  const [{ data: product }, { data: allProducts }, { data: reviews }, ratingStats, { data: relatedData }] = await Promise.all([
     getProductById(productId),
     getCatalogProducts(),
     getProductReviews(productId),
     getProductRatingStats(productId),
+    getRelatedProducts(productId, 6),
   ]);
 
   if (!product) {
@@ -31,10 +32,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
   const typedProduct = product as CatalogProductWithImages;
 
-  // Get related products: same category, excluding current
-  const relatedProducts = (allProducts || []).filter(
-    (p) => p.id !== typedProduct.id
-  ).slice(0, 6);
+  // 8.3 — co-purchase / category / fallback. The action returns
+  // enriched rows with a `reason` tag we can show in the UI later.
+  const relatedProducts = (relatedData ?? []).map((r) => r.product);
 
   return (
     <div className="min-h-screen bg-black pb-20">

@@ -429,6 +429,205 @@ export async function searchByImage(input: {
   return { data: { matches: matched, unmatched, hint: input.hint ?? null }, usage };
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Phase 8.3 — getRelatedProducts
+// ─────────────────────────────────────────────────────────────────────
+
+export type RelatedReason = 'co_purchase' | 'category' | 'fallback';
+
+export interface RelatedProduct {
+  product: CatalogProductWithImages;
+  reason: RelatedReason;
+  /** For 'co_purchase': number of shared buyers. For 'category' / 'fallback': 0. */
+  score: number;
+}
+
+/**
+ * Returns the products most likely to be useful as "You may also
+ * like" recommendations for the given product.
+ *
+ * Algorithm (3 tiers, in priority order):
+ *
+ *   1. CO-PURCHASE — find clients who bought this product; count
+ *      which other products those same clients bought; return the
+ *      top ones. This is the classic "people who bought X also
+ *      bought Y" recommender.
+ *
+ *   2. CATEGORY — if we don't have enough co-purchase data, fall
+ *      back to products in the same category (excluding the
+ *      current one). Useful for new / niche products.
+ *
+ *   3. FALLBACK — if even the category has too few products, return
+ *      other in-stock products. Better than an empty section.
+ *
+ * Sales in this app are single-product rows, so the "frequently
+ * bought together" pattern is approximated by "clients who bought
+ * X also bought Y" across time. Not as tight as a same-cart signal
+ * but still useful at this scale.
+ */
+export async function getRelatedProducts(
+  productId: string,
+  limit = 6
+): Promise<{ data?: RelatedProduct[]; error?: string }> {
+  if (!productId) return { error: 'productId is required' };
+  limit = Math.max(1, Math.min(20, limit));
+
+  const supabase = await createServerSupabaseClient();
+
+  // 1) Load the current product.
+  const { data: current, error: currentError } = await supabase
+    .from('products')
+    .select('id, name, category_id, is_visible_in_catalog, stock_level, deleted_at')
+    .eq('id', productId)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  if (currentError) return { error: currentError.message };
+  if (!current) return { data: [] };
+
+  const currentRow = current as {
+    id: string;
+    name: string;
+    category_id: string | null;
+    is_visible_in_catalog?: boolean;
+    stock_level: number;
+  };
+
+  // 2) Tier 1: co-purchase. Find clients who bought this product,
+  //    then aggregate the OTHER products those clients bought.
+  const { data: sharedClientRows, error: sharedError } = await supabase
+    .from('sales')
+    .select('client_id')
+    .eq('product_id', productId)
+    .is('deleted_at', null);
+
+  if (!sharedError && sharedClientRows && sharedClientRows.length > 0) {
+    const clientIds = Array.from(
+      new Set(
+        (sharedClientRows as Array<{ client_id: string | null }>)
+          .map((r) => r.client_id)
+          .filter((id): id is string => !!id)
+      )
+    );
+
+    if (clientIds.length > 0) {
+      const { data: otherSales, error: otherError } = await supabase
+        .from('sales')
+        .select('product_id')
+        .in('client_id', clientIds)
+        .neq('product_id', productId)
+        .is('deleted_at', null);
+
+      if (!otherError && otherSales) {
+        // Count occurrences per product.
+        const counts = new Map<string, number>();
+        for (const s of otherSales as Array<{ product_id: string | null }>) {
+          if (!s.product_id) continue;
+          counts.set(s.product_id, (counts.get(s.product_id) ?? 0) + 1);
+        }
+        const topIds = Array.from(counts.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, limit * 2) // over-fetch in case some are out of stock
+          .map(([id]) => id);
+
+        if (topIds.length > 0) {
+          const { data: topProducts, error: topError } = await supabase
+            .from('products')
+            .select('id, name, selling_price, catalog_price, image_url, image_urls, stock_level, description, is_visible_in_catalog, deleted_at')
+            .in('id', topIds)
+            .eq('is_visible_in_catalog', true)
+            .gt('stock_level', 0)
+            .is('deleted_at', null);
+
+          if (!topError && topProducts && topProducts.length > 0) {
+            const enriched: RelatedProduct[] = (topProducts as unknown as CatalogProductWithImages[] & Array<{ id: string; image_url: string | null; image_urls: string[] | null; catalog_price?: number | null }>)
+              .map((p) => ({
+                product: {
+                  ...p,
+                  selling_price: p.catalog_price ?? p.selling_price,
+                  images: p.image_urls && p.image_urls.length > 0
+                    ? p.image_urls
+                    : p.image_url
+                      ? [p.image_url]
+                      : [],
+                },
+                reason: 'co_purchase' as const,
+                score: counts.get(p.id) ?? 0,
+              }))
+              .sort((a, b) => b.score - a.score)
+              .slice(0, limit);
+
+            if (enriched.length > 0) return { data: enriched };
+          }
+        }
+      }
+    }
+  }
+
+  // 3) Tier 2: same category.
+  if (currentRow.category_id) {
+    const { data: sameCat, error: catError } = await supabase
+      .from('products')
+      .select('id, name, selling_price, catalog_price, image_url, image_urls, stock_level, description, is_visible_in_catalog, deleted_at')
+      .eq('category_id', currentRow.category_id)
+      .neq('id', productId)
+      .eq('is_visible_in_catalog', true)
+      .gt('stock_level', 0)
+      .is('deleted_at', null)
+      .order('name', { ascending: true })
+      .limit(limit);
+
+    if (!catError && sameCat && sameCat.length > 0) {
+      return {
+        data: (sameCat as unknown as CatalogProductWithImages[] & Array<{ image_url: string | null; image_urls: string[] | null; catalog_price?: number | null }>).map((p) => ({
+          product: {
+            ...p,
+            selling_price: p.catalog_price ?? p.selling_price,
+            images: p.image_urls && p.image_urls.length > 0
+              ? p.image_urls
+              : p.image_url
+                ? [p.image_url]
+                : [],
+          },
+          reason: 'category' as const,
+          score: 0,
+        })),
+      };
+    }
+  }
+
+  // 4) Tier 3: fallback — other visible, in-stock products.
+  const { data: fallback, error: fallbackError } = await supabase
+    .from('products')
+    .select('id, name, selling_price, catalog_price, image_url, image_urls, stock_level, description, is_visible_in_catalog, deleted_at')
+    .neq('id', productId)
+    .eq('is_visible_in_catalog', true)
+    .gt('stock_level', 0)
+    .is('deleted_at', null)
+    .order('name', { ascending: true })
+    .limit(limit);
+
+  if (fallbackError) return { error: fallbackError.message };
+  return {
+    data: (fallback ?? []).map((p) => {
+      const row = p as unknown as CatalogProductWithImages & { image_url: string | null; image_urls: string[] | null; catalog_price?: number | null };
+      return {
+        product: {
+          ...row,
+          selling_price: row.catalog_price ?? row.selling_price,
+          images: row.image_urls && row.image_urls.length > 0
+            ? row.image_urls
+            : row.image_url
+              ? [row.image_url]
+              : [],
+        },
+        reason: 'fallback' as const,
+        score: 0,
+      };
+    }),
+  };
+}
+
 function parseVisualSearchNames(content: string): string[] {
   const cleaned = content
     .replace(/^```(?:json)?\s*/i, '')
