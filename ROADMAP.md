@@ -165,7 +165,7 @@ Operations & Scaling
 
 - [x] **4C.1.** Route `/(pos)/learn/` — pillar grid home
 - [x] **4C.2.** Route `/(pos)/learn/[pillarSlug]/` — lesson list per pillar
-- [ ] **4C.3.** Route `/(pos)/learn/[pillarSlug]/[lessonSlug]/` — lesson reader
+- [x] **4C.3.** Route `/(pos)/learn/[pillarSlug]/[lessonSlug]/` — lesson reader
       with markdown render, optional audio player, "Apply to your business"
       CTA list, "Take quiz" button
 - [ ] **4C.4.** Add "Learn" tab to POS bottom nav (will require reshaping the

@@ -30,7 +30,7 @@ import { lessonQuiz } from '@/lib/ai/prompts';
 import type { QuizDataContext } from '@/lib/ai/prompts/lesson-quiz';
 import { cfoToolHandlers } from '@/lib/ai/cfo-tools';
 import { getDashboardStats } from '@/lib/actions/dashboard';
-import type { Pillar, Lesson } from '@/lib/supabase-types';
+import type { Pillar, Lesson, LessonResource } from '@/lib/supabase-types';
 
 // ─────────────────────────────────────────────────────────────────────
 // Public types
@@ -165,6 +165,98 @@ export async function getLessonsByPillar(
 
   if (error) return { error: error.message };
   return { data: (data ?? []) as Omit<Lesson, 'body_md'>[] };
+}
+
+/**
+ * Fetch a single lesson by pillar slug + lesson slug. Used by 4C.3
+ * (lesson reader). Returns the full lesson including body_md.
+ */
+export async function getLessonBySlug(
+  pillarSlug: string,
+  lessonSlug: string
+): Promise<{ data?: Lesson; error?: string }> {
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const supabase = auth.supabase;
+
+  // Join lessons + pillars in one query so we can filter by both slugs.
+  // The foreign key from lessons.pillar_id → pillars.id is the join key.
+  const { data, error } = await supabase
+    .from('lessons')
+    .select(
+      '*, pillar:pillars!inner(slug, name, color, icon)'
+    )
+    .eq('slug', lessonSlug)
+    .eq('is_published', true)
+    .eq('pillars.slug', pillarSlug)
+    .maybeSingle();
+
+  if (error) return { error: error.message };
+  if (!data) return { error: 'Lesson not found' };
+
+  return { data: data as unknown as Lesson };
+}
+
+/**
+ * Fetch the "Apply to your business" links for a lesson. Used by 4C.3
+ * (lesson reader) to render the resource buttons at the bottom.
+ */
+export async function getLessonResources(
+  lessonId: string
+): Promise<{ data?: LessonResource[]; error?: string }> {
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const supabase = auth.supabase;
+
+  const { data, error } = await supabase
+    .from('lesson_resources')
+    .select('id, lesson_id, label, href, kind, display_order')
+    .eq('lesson_id', lessonId)
+    .order('display_order', { ascending: true });
+
+  if (error) return { error: error.message };
+  return { data: (data ?? []) as LessonResource[] };
+}
+
+/**
+ * Mark a quiz as completed (or update the existing score). Used by the
+ * Take quiz client component after the user finishes answering. The
+ * score is 0-100, computed as (correctAnswers / totalQuestions) * 100.
+ *
+ * Upserts into `user_lesson_progress`: if a row exists for
+ * (user_id, lesson_id), update quiz_score + last_seen_at; otherwise
+ * insert a new row.
+ */
+export async function markQuizCompleted(
+  lessonId: string,
+  score: number
+): Promise<{ data?: { score: number }; error?: string }> {
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const { supabase, userId } = auth;
+
+  if (typeof score !== 'number' || score < 0 || score > 100) {
+    return { error: 'score must be 0-100' };
+  }
+  if (!lessonId) return { error: 'lessonId is required' };
+
+  // Upsert. The UNIQUE(user_id, lesson_id) constraint makes this safe.
+  const { error } = await supabase
+    .from('user_lesson_progress')
+    .upsert(
+      {
+        user_id: userId,
+        lesson_id: lessonId,
+        quiz_score: Math.round(score),
+        last_seen_at: new Date().toISOString(),
+        // completed_at gets set when the user finishes the lesson body
+        // (4D.1). For now the quiz alone doesn't mark a lesson complete.
+      },
+      { onConflict: 'user_id,lesson_id' }
+    );
+
+  if (error) return { error: error.message };
+  return { data: { score: Math.round(score) } };
 }
 
 // ─────────────────────────────────────────────────────────────────────
