@@ -5,7 +5,8 @@ import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { getInventory, createProduct, updateProduct, deleteProduct } from '@/lib/actions/inventory';
 import { formatCurrency } from '@/lib/utils';
-import { Package, Plus, X, Pencil, Trash2, Search, ImagePlus, Upload, XCircle, ChevronLeft, ChevronRight, Eye, EyeOff } from 'lucide-react';
+import { Package, Plus, X, Pencil, Trash2, Search, ImagePlus, Upload, XCircle, ChevronLeft, ChevronRight, Eye, EyeOff, Sparkles } from 'lucide-react';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import type { Product } from '@/lib/supabase-types';
 import { Skeleton, SkeletonCard, EmptyState } from '@/components/ui/Skeleton';
@@ -233,9 +234,18 @@ function InventoryContent() {
             {products.length} Products
           </p>
         </div>
-        <button onClick={openCreate} className="btn-tactical px-4">
-          <Plus className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/inventory/forecast"
+            className="px-3 h-10 inline-flex items-center gap-1.5 rounded-xl bg-tactical-blue/15 border border-tactical-blue/30 text-tactical-blue text-xs font-black uppercase tracking-widest hover:bg-tactical-blue/25 transition-colors"
+          >
+            <Sparkles className="w-4 h-4" />
+            Forecasts
+          </Link>
+          <button onClick={openCreate} className="btn-tactical px-4">
+            <Plus className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       {/* Search */}

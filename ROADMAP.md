@@ -242,7 +242,7 @@ Operations & Scaling
       next-installment default based on history
 - [x] **7.5.** UI: Forecast widget on dashboard with "next 30 days cash"
       sparkline
-- [ ] **7.6.** UI: Per-product forecast card in inventory page
+- [x] **7.6.** UI: Per-product forecast card in inventory page
 - [ ] **7.7.** Smart reorder alert: combine forecast + supplier lead time +
       safety stock (existing `reorder.ts` action — wire UI to it)
 - [ ] **7.8.** Scheduled job (Vercel Cron) to regenerate forecasts nightly
