@@ -255,15 +255,16 @@ Operations & Scaling
 > Make the public catalog smarter. Still Zambia-only.
 
 - [x] **8.1.** Auto-generate product descriptions with Groq from
-      name + category + price (review/edit before publish)
+      name + category + price (review/edit before publish) — commit `db01288`
 - [x] **8.2.** Visual search — Groq vision model matches uploaded photo to
-      inventory
-- [x] **8.3.** "You may also like" — purchase-history co-occurrence
-- [x] **8.4.** AI chatbot on catalog with WhatsApp handoff (already have
-      WhatsApp link helper)
+      inventory — commit `20eb720`
+- [x] **8.3.** "You may also like" — purchase-history co-occurrence —
+      commit `f857c73`
+- [x] **8.4.** AI chatbot on catalog with WhatsApp handoff — commit `ed0234a`
 - [x] **8.5.** Order status workflow UI (pending → confirmed → packed →
-      shipped → delivered) — schema half-done in `create_online_store_tables`
-- [x] **8.6.** Review summaries — Groq summarizes reviews per product
+      shipped → delivered) — commit `072768e`
+- [x] **8.6.** Review summaries — Groq summarizes reviews per product —
+      commit `e25e101`
 
 ---
 
@@ -271,17 +272,29 @@ Operations & Scaling
 
 > Make the AI yours over time.
 
-- [ ] **9.1.** `ai_recommendations` table (id, user_id, kind, payload,
-      generated_at, accepted_at NULL, rejected_at NULL)
-- [ ] **9.2.** Track accept/reject on every AI suggestion
-- [ ] **9.3.** Weekly briefing email (Vercel Cron) — Groq composes a
-      "what changed" summary from your week's data
-- [ ] **9.4.** Anomaly detection — AI watches daily sales/expense patterns,
-      alerts on outliers
-- [ ] **9.5.** Goal tracking — set revenue / profit / cash-buffer goals;
-      AI tracks progress and suggests interventions
-- [ ] **9.6.** Memory layer — feed prior accepted/rejected recommendations
-      back into prompt context so the AI learns your preferences
+- [x] **9.1.** `ai_recommendations` table (id, kind, title, body, payload,
+      priority, status, source_action, related_id, expires_at, updated_at
+      trigger) — commit `0573a75`
+- [x] **9.2.** Track accept/reject on every AI suggestion —
+      `updateRecommendationStatus(dismissed/accepted/acted_on)` with
+      optimistic UI, `getRecommendationHistory()` for the memory layer —
+      commit `0573a75`
+- [x] **9.3.** Weekly briefing (Vercel Cron, Sun 08:00 Lusaka) — Groq
+      composes summary/highlight/3-5 sections from past 7 days snapshot,
+      persisted as `kind='weekly_briefing'` row — commits `9cd4915`,
+      `c7e36c5` (memory injection)
+- [x] **9.4.** Anomaly detection (Vercel Cron, 02:15 Lusaka) — IQR
+      boxplot on 30-day same-day-of-week baseline, flags revenue
+      high/low and expense spikes — commits `d0c2781`, `c7e36c5`
+      (priority blending with memory)
+- [x] **9.5.** Goal tracking — `goals` table (revenue/profit/cash_buffer,
+      weekly/monthly), live progress bars on dashboard, inline create/deactivate
+      form, nightly sync cron (02:30 Lusaka) — commit `ccb0efc`
+- [x] **9.6.** Memory layer — `getMemorySnapshot()` reads 60-day
+      accept/reject history, computes per-kind engagement score, renders
+      `USER PREFERENCES` prose block for all AI system prompts,
+      blends priority hints into anomaly and goal-progress actions —
+      commit `c7e36c5`
 
 ---
 
@@ -357,4 +370,4 @@ If you stop and come back later:
 
 ---
 
-_Last updated: initial planning — pre-implementation_
+_Last updated: Phase 9 (9.1–9.6) completed 2026-07-15, commits `0573a75` `9cd4915` `d0c2781` `ccb0efc` `c7e36c5`)_
