@@ -270,6 +270,53 @@ export interface ReviewSummaryPayload {
   reviewCount: number;
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// AI Recommendations inbox (Phase 9)
+// ─────────────────────────────────────────────────────────────────────
+
+/** Discriminator for the kind of AI recommendation. */
+export type AIRecommendationKind =
+  | 'reorder_alert'
+  | 'cashflow_warning'
+  | 'anomaly'
+  | 'weekly_briefing'
+  | 'goal_progress'
+  | 'forecast_alert'
+  | 'custom';
+
+export type AIRecommendationPriority = 'low' | 'medium' | 'high';
+
+export type AIRecommendationStatus =
+  | 'pending'     // not yet shown
+  | 'delivered'   // shown to the user
+  | 'dismissed'   // user discarded
+  | 'accepted'    // user marked as useful
+  | 'acted_on';   // user took the suggested action
+
+/**
+ * One row in the `ai_recommendations` inbox. The payload is
+ * kind-specific (see lib/actions/recommendations.ts for the
+ * per-kind shape).
+ */
+export interface AIRecommendation {
+  id: string;
+  kind: AIRecommendationKind;
+  title: string;
+  body: string;
+  payload: Record<string, unknown>;
+  priority: AIRecommendationPriority;
+  status: AIRecommendationStatus;
+  source_action: string | null;
+  related_id: string | null;
+  user_id: string | null;
+  created_at: string;
+  updated_at: string;
+  delivered_at: string | null;
+  dismissed_at: string | null;
+  acted_on_at: string | null;
+  expires_at: string | null;
+}
+
 export interface DashboardStats {
   groundTruth: number;
   inPipeline: number;

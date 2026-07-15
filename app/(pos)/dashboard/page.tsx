@@ -6,6 +6,7 @@ import DailyInsightsWidget from './DailyInsights';
 import { AskCfoChip } from '@/components/dashboard/AskCfoChip';
 import { TodaysLessonWidget } from '@/components/learn/TodaysLessonWidget';
 import { ForecastWidget } from '@/components/dashboard/ForecastWidget';
+import { RecommendationsInbox } from '@/components/dashboard/RecommendationsInbox';
 import { formatCurrency } from '@/lib/utils';
 import {
   TrendingUp,
@@ -125,6 +126,9 @@ export default async function DashboardPage() {
           </div>
         </Link>
       </div>
+
+      {/* AI Recommendations Inbox (9.1 + 9.2) — pending suggestions from the system */}
+      <RecommendationsInbox limit={5} />
 
       {/* Today's lesson (4C.5) — Learning Academy quick surface */}
       {todaysLesson && (
