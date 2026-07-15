@@ -176,8 +176,8 @@ Operations & Scaling
 
 ## 4D — Quality
 
-- [ ] **4D.1.** Track read-time per lesson (scroll depth); persist progress
-- [ ] **4D.2.** Add "Bookmarks" feature (save lessons to revisit)
+- [x] **4D.1.** Track read-time per lesson (scroll depth); persist progress
+- [x] **4D.2.** Add "Bookmarks" feature (save lessons to revisit)
 - [ ] **4D.3.** Add daily-streak reminder push (opt-in, uses
       `usePushNotifications` hook that already exists)
 

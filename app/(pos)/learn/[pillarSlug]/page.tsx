@@ -1,36 +1,73 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Clock, BookOpen } from 'lucide-react';
+import { ArrowLeft, Clock, BookOpen, BookmarkCheck, CheckCircle2 } from 'lucide-react';
 import {
   getPillarBySlug,
   getLessonsByPillar,
 } from '@/lib/actions/learn';
 import { resolvePillarIcon, pillarColorClasses } from '@/lib/learn/pillar-ui';
+import {
+  LessonListFilter,
+  type LessonFilter,
+} from '@/components/learn/LessonListFilter';
 
 /**
- * Learning Academy — pillar lesson list (Phase 4 / 4C.2).
+ * Learning Academy — pillar lesson list (Phase 4 / 4C.2 + 4D.2).
  *
  * Server component. Renders the pillar header (icon, name, description,
- * lesson count) and an ordered list of lessons for the pillar. Each
- * lesson card links to the reader (4C.3 — `/(pos)/learn/[pillarSlug]/[lessonSlug]/`).
+ * lesson count), a filter bar (All / Unread / Bookmarked), and an
+ * ordered list of lessons for the pillar.
  *
- * Per the roadmap split, this page intentionally does NOT show
- * progress / completion state — that lands in 4D.1 (read-time tracking)
- * and 4D.2 (bookmarks). The cards just show title + read time + a
- * "Read lesson" affordance.
+ * 4D.2 adds:
+ *   - Bookmark icon on each lesson card when bookmarked
+ *   - "Completed" checkmark when completed_at is set
+ *   - Filter chips that update the URL ?filter= param; the server
+ *     component re-runs the filter on every navigation
+ *   - A 'use client' LessonListFilter chip component wrapped in
+ *     Suspense because it uses useSearchParams (Next.js 14 requirement)
  */
+
+const VALID_FILTERS: ReadonlyArray<LessonFilter> = ['all', 'unread', 'bookmarked'];
+
+function isValidFilter(value: string | undefined): value is LessonFilter {
+  return !!value && (VALID_FILTERS as readonly string[]).includes(value);
+}
 
 export default async function PillarPage({
   params,
+  searchParams,
 }: {
   params: { pillarSlug: string };
+  searchParams?: { filter?: string };
 }) {
   const { data: pillar, error: pillarError } = await getPillarBySlug(params.pillarSlug);
   if (pillarError || !pillar) notFound();
 
-  const { data: lessons, error: lessonsError } = await getLessonsByPillar(pillar.id);
+  const { data: lessonsAll, error: lessonsError } = await getLessonsByPillar(pillar.id);
   const Icon = resolvePillarIcon(pillar.icon);
   const color = pillarColorClasses(pillar.color);
+
+  // 4D.2 — server-side filter. The client just updates the URL; the
+  // server does the actual filtering so the page is shareable / refresh-safe.
+  const lessons = lessonsAll ?? [];
+  const activeFilter: LessonFilter = isValidFilter(searchParams?.filter)
+    ? searchParams!.filter as LessonFilter
+    : 'all';
+
+  const filteredLessons = lessons.filter((l) => {
+    if (activeFilter === 'unread') return !l.completedAt;
+    if (activeFilter === 'bookmarked') return l.bookmarked;
+    return true;
+  });
+
+  // Counts shown next to each filter chip. Helps users see at a glance
+  // how many lessons match each view.
+  const counts = {
+    all: lessons.length,
+    unread: lessons.filter((l) => !l.completedAt).length,
+    bookmarked: lessons.filter((l) => l.bookmarked).length,
+  } satisfies Record<LessonFilter, number>;
 
   return (
     <div className="space-y-6">
@@ -67,6 +104,14 @@ export default async function PillarPage({
         </div>
       </div>
 
+      {/* 4D.2 — filter chips. Wrapped in Suspense because the client
+          component uses useSearchParams. */}
+      {lessons.length > 0 && (
+        <Suspense fallback={null}>
+          <LessonListFilter active={activeFilter} counts={counts} />
+        </Suspense>
+      )}
+
       {/* Error state */}
       {lessonsError && (
         <div className="card-tactical border-tactical-red/30 bg-tactical-red/10 p-4">
@@ -75,8 +120,8 @@ export default async function PillarPage({
         </div>
       )}
 
-      {/* Empty state */}
-      {!lessonsError && (!lessons || lessons.length === 0) && (
+      {/* Empty state (no lessons in pillar at all) */}
+      {!lessonsError && lessons.length === 0 && (
         <div className="card-tactical text-center py-12">
           <BookOpen className="w-12 h-12 text-white/10 mx-auto mb-3" />
           <p className="text-sm text-white/40 uppercase tracking-widest">
@@ -85,25 +130,40 @@ export default async function PillarPage({
         </div>
       )}
 
+      {/* Filtered-empty state (lessons exist but none match the filter) */}
+      {!lessonsError && lessons.length > 0 && filteredLessons.length === 0 && (
+        <div className="card-tactical text-center py-10">
+          <p className="text-sm text-white/40">
+            {activeFilter === 'bookmarked'
+              ? "You haven't bookmarked any lessons in this pillar yet."
+              : 'No unread lessons in this pillar. Nice work!'}
+          </p>
+        </div>
+      )}
+
       {/* Lesson list */}
-      {lessons && lessons.length > 0 && (
+      {filteredLessons.length > 0 && (
         <div className="space-y-2">
-          {lessons.map((lesson, idx) => (
+          {filteredLessons.map((lesson, idx) => (
             <Link
               key={lesson.id}
               href={`/learn/${pillar.slug}/${lesson.slug}`}
               className="card-tactical flex items-center gap-3 hover:bg-white/5 transition-colors group"
             >
-              {/* Numbered marker */}
-              <div className={`w-9 h-9 shrink-0 rounded-xl ${color.bg} flex items-center justify-center`}>
-                <span className={`text-sm font-black ${color.icon}`}>
-                  {String(idx + 1).padStart(2, '0')}
-                </span>
+              {/* Numbered marker (or checkmark if completed) */}
+              <div className={`w-9 h-9 shrink-0 rounded-xl ${color.bg} flex items-center justify-center relative`}>
+                {lesson.completedAt ? (
+                  <CheckCircle2 className={`w-5 h-5 ${color.icon}`} />
+                ) : (
+                  <span className={`text-sm font-black ${color.icon}`}>
+                    {String(idx + 1).padStart(2, '0')}
+                  </span>
+                )}
               </div>
 
               {/* Title + meta */}
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-sm leading-snug">
+                <p className={`font-bold text-sm leading-snug ${lesson.completedAt ? 'text-white/60' : ''}`}>
                   {lesson.title}
                 </p>
                 <div className="flex items-center gap-2 mt-1 text-[10px] uppercase tracking-widest font-bold text-white/40">
@@ -120,6 +180,14 @@ export default async function PillarPage({
                   )}
                 </div>
               </div>
+
+              {/* 4D.2 — bookmark badge */}
+              {lesson.bookmarked && (
+                <BookmarkCheck
+                  className={`w-4 h-4 ${color.icon} shrink-0`}
+                  aria-label="Bookmarked"
+                />
+              )}
             </Link>
           ))}
         </div>

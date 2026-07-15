@@ -146,25 +146,69 @@ export async function getPillarBySlug(
  * by 4C.2 (pillar lesson list page). The lessons arrive WITHOUT their
  * body_md to keep the list payload small; the reader (4C.3) fetches
  * the full body separately.
+ *
+ * For 4D.2 we also join the user's per-lesson progress so the list
+ * can show bookmark + completion + read state without an extra round
+ * trip from the client. We project the same columns plus
+ * `bookmarked` and `completed_at` (NULL when no row exists).
  */
 export async function getLessonsByPillar(
   pillarId: string
-): Promise<{ data?: Omit<Lesson, 'body_md'>[]; error?: string }> {
+): Promise<{
+  data?: Array<Omit<Lesson, 'body_md'> & {
+    bookmarked: boolean;
+    completedAt: string | null;
+  }>;
+  error?: string;
+}> {
   const auth = await requireAuth();
   if ('error' in auth) return { error: auth.error };
-  const supabase = auth.supabase;
+  const { supabase, userId } = auth;
 
-  const { data, error } = await supabase
-    .from('lessons')
-    .select(
-      'id, pillar_id, slug, title, audio_url, est_minutes, display_order, requires_data, is_published, created_at, updated_at'
-    )
-    .eq('pillar_id', pillarId)
-    .eq('is_published', true)
-    .order('display_order', { ascending: true });
+  // Pull the lessons and the user's progress for those lessons in two
+  // queries, then merge in JS. PostgREST's nested-join syntax works
+  // for single-row fetches but is awkward to filter by user_id when
+  // progress might be missing — the two-query merge is clearer.
+  const [lessonsRes, progressRes] = await Promise.all([
+    supabase
+      .from('lessons')
+      .select(
+        'id, pillar_id, slug, title, audio_url, est_minutes, display_order, requires_data, is_published, created_at, updated_at'
+      )
+      .eq('pillar_id', pillarId)
+      .eq('is_published', true)
+      .order('display_order', { ascending: true }),
+    supabase
+      .from('user_lesson_progress')
+      .select('lesson_id, bookmarked, completed_at')
+      .eq('user_id', userId),
+  ]);
 
-  if (error) return { error: error.message };
-  return { data: (data ?? []) as Omit<Lesson, 'body_md'>[] };
+  if (lessonsRes.error) return { error: lessonsRes.error.message };
+  if (progressRes.error) return { error: progressRes.error.message };
+
+  type ProgressRow = {
+    lesson_id: string;
+    bookmarked?: boolean;
+    completed_at?: string | null;
+  };
+  const progressByLesson = new Map<string, ProgressRow>();
+  for (const row of (progressRes.data ?? []) as ProgressRow[]) {
+    progressByLesson.set(row.lesson_id, row);
+  }
+
+  const merged = ((lessonsRes.data ?? []) as Omit<Lesson, 'body_md'>[]).map(
+    (lesson) => {
+      const p = progressByLesson.get(lesson.id);
+      return {
+        ...lesson,
+        bookmarked: p?.bookmarked ?? false,
+        completedAt: p?.completed_at ?? null,
+      };
+    }
+  );
+
+  return { data: merged };
 }
 
 /**
@@ -408,6 +452,57 @@ export async function markLessonRead(
   // Reuse updateLessonProgress with completed: true. It already
   // enforces the sticky-once-completed rule.
   return updateLessonProgress(lessonId, { completed: true });
+}
+
+/**
+ * Toggle (or set) the bookmark flag on a lesson (4D.2).
+ *
+ * If `bookmarked` is omitted, flips the current value. If provided,
+ * forces that value. Upserts into `user_lesson_progress` so we don't
+ * need to require the user to have read the lesson first.
+ *
+ * The `bookmarked` column is the only field written here — we never
+ * touch scroll/read/quiz state from this action.
+ */
+export async function toggleBookmark(
+  lessonId: string,
+  bookmarked?: boolean
+): Promise<{ data?: { bookmarked: boolean }; error?: string }> {
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const { supabase, userId } = auth;
+
+  if (!lessonId) return { error: 'lessonId is required' };
+
+  // Look up current state. If a row exists, decide the new value
+  // (toggle or set). If no row exists, we treat the current as
+  // `false` and apply the new value (which may be `true` or `false`).
+  const { data: existing } = await supabase
+    .from('user_lesson_progress')
+    .select('bookmarked')
+    .eq('user_id', userId)
+    .eq('lesson_id', lessonId)
+    .maybeSingle();
+
+  const currentBookmarked =
+    (existing as { bookmarked?: boolean } | null)?.bookmarked ?? false;
+  const nextBookmarked =
+    typeof bookmarked === 'boolean' ? bookmarked : !currentBookmarked;
+
+  const { error } = await supabase
+    .from('user_lesson_progress')
+    .upsert(
+      {
+        user_id: userId,
+        lesson_id: lessonId,
+        bookmarked: nextBookmarked,
+        last_seen_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,lesson_id' }
+    );
+
+  if (error) return { error: error.message };
+  return { data: { bookmarked: nextBookmarked } };
 }
 
 // ─────────────────────────────────────────────────────────────────────

@@ -11,6 +11,7 @@ import { resolvePillarIcon, pillarColorClasses } from '@/lib/learn/pillar-ui';
 import { Markdown } from '@/lib/learn/markdown';
 import { TakeQuizButton } from '@/components/learn/TakeQuizButton';
 import { LessonProgressTracker } from '@/components/learn/LessonProgressTracker';
+import { LessonBookmarkButton } from '@/components/learn/LessonBookmarkButton';
 import type { Lesson, LessonResource } from '@/lib/supabase-types';
 
 /**
@@ -69,6 +70,8 @@ export default async function LessonPage({
   const initialCompleted = !!progress?.completedAt;
   const initialReadSeconds = progress?.readSeconds ?? 0;
   const initialScrollDepthPct = progress?.scrollDepthPct ?? 0;
+  // 4D.2 — initial bookmark state for the header button.
+  const initialBookmarked = progress?.bookmarked ?? false;
 
   const Icon = resolvePillarIcon(lesson.pillar?.icon ?? pillar.icon);
   const color = pillarColorClasses(lesson.pillar?.color ?? pillar.color);
@@ -121,6 +124,8 @@ export default async function LessonPage({
                 )}
               </div>
             </div>
+            {/* 4D.2 — bookmark button */}
+            <LessonBookmarkButton lessonId={lesson.id} initialBookmarked={initialBookmarked} />
           </div>
 
           {/* Take quiz button (client) */}
