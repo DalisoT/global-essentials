@@ -10,6 +10,10 @@
       "schedule": "15 0 * * *"
     },
     {
+      "path": "/api/cron/sync-goal-progress",
+      "schedule": "30 0 * * *"
+    },
+    {
       "path": "/api/cron/weekly-briefing",
       "schedule": "0 6 * * 0"
     }

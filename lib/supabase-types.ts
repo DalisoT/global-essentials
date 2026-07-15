@@ -317,6 +317,50 @@ export interface AIRecommendation {
   expires_at: string | null;
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Goals (Phase 9 / 9.5)
+// ─────────────────────────────────────────────────────────────────────
+
+export type GoalKind = 'revenue' | 'profit' | 'cash_buffer';
+export type GoalPeriod = 'weekly' | 'monthly';
+
+/**
+ * A revenue / profit / cash-buffer target the owner has set
+ * for a specific period. Multiple goals can coexist (e.g. one
+ * weekly revenue target, one monthly profit target).
+ */
+export interface Goal {
+  id: string;
+  kind: GoalKind;
+  title: string;
+  target_amount: number;
+  period: GoalPeriod;
+  /** YYYY-MM-DD. */
+  period_start: string;
+  /** YYYY-MM-DD, or null for open-ended. */
+  period_end: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Live progress on one goal — current_value is computed at
+ * read time, not stored. The action layer returns these to
+ * the dashboard / inbox so the user sees where they stand.
+ */
+export interface GoalProgress extends Goal {
+  current_value: number;
+  /** 0..100, can exceed 100 if the user is over-performing. */
+  progress_pct: number;
+  /** Days remaining in the period (0 if period_end is past). */
+  days_remaining: number;
+  /** What the user needs to do per day to hit the target. */
+  needed_per_day: number;
+  /** True if goal is met or exceeded. */
+  on_track: boolean;
+}
+
 export interface DashboardStats {
   groundTruth: number;
   inPipeline: number;
