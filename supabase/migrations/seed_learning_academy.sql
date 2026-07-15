@@ -10,6 +10,39 @@
 -- let future authors reference these rows in code without joins by id.
 
 -- ─────────────────────────────────────────────────────────────────────
+-- SELF-HEAL: fix typos in previously-seeded lesson UUIDs.
+--
+-- The first version of this seed shipped with three rows that had
+-- the wrong trailing digit in the lesson id (e.g. the AR-aging lesson
+-- got id ...0001 instead of ...0004). The lessons themselves were
+-- inserted fine; the typo only surfaced when lesson_resources tried
+-- to reference them by id and failed the FK check.
+--
+-- On a fresh DB none of the UPDATEs below will match any rows, so
+-- this block is a no-op. On a DB that was seeded by the buggy
+-- version, it migrates the rows to the correct UUIDs so the FK
+-- constraints downstream resolve cleanly.
+-- ─────────────────────────────────────────────────────────────────────
+
+-- AR aging lesson: was inserted as ...1004.../0001, should be ...0004
+UPDATE lessons
+  SET id = 'a1b2c3d4-1004-4000-a000-000000000004'::uuid
+  WHERE id = 'a1b2c3d4-1004-4000-a000-000000000001'::uuid
+    AND slug = 'accounts-receivable-aging';
+
+-- Hiring lesson: was inserted as ...3004.../0003, should be ...0004
+UPDATE lessons
+  SET id = 'a1b2c3d4-3004-4000-a000-000000000004'::uuid
+  WHERE id = 'a1b2c3d4-3004-4000-a000-000000000003'::uuid
+    AND slug = 'hiring-trigger-formula';
+
+-- Cash-flow lesson: was inserted correctly as ...1002/0002. The
+-- lesson_resources row for it, however, had a typo (...1002/0001)
+-- that didn't match any lesson. There's no row to migrate here
+-- because the resources INSERT never committed; the seed will
+-- re-insert it with the correct UUID on this run.
+
+-- ─────────────────────────────────────────────────────────────────────
 -- PILLARS
 -- ─────────────────────────────────────────────────────────────────────
 
@@ -94,7 +127,7 @@ INSERT INTO lessons (id, pillar_id, slug, title, body_md, est_minutes, display_o
     ARRAY['journal','expenses']
   ),
   (
-    'a1b2c3d4-1004-4000-a000-000000000001',
+    'a1b2c3d4-1004-4000-a000-000000000004',
     'a1b2c3d4-0001-4000-a000-000000000001',
     'accounts-receivable-aging',
     'Accounts Receivable Aging',
@@ -174,7 +207,7 @@ INSERT INTO lessons (id, pillar_id, slug, title, body_md, est_minutes, display_o
     ARRAY['sales','profitability']
   ),
   (
-    'a1b2c3d4-3004-4000-a000-000000000003',
+    'a1b2c3d4-3004-4000-a000-000000000004',
     'a1b2c3d4-0003-4000-a000-000000000003',
     'hiring-trigger-formula',
     'The Hiring Trigger Formula',
@@ -233,13 +266,13 @@ INSERT INTO lesson_resources (id, lesson_id, label, href, kind, display_order) V
   ('a1b2c3d4-9001-4000-a000-000000000001', 'a1b2c3d4-1001-4000-a000-000000000001',
    'Open the Profitability page', '/profitability', 'internal', 1),
   -- Cash flow vs profit → AI CFO
-  ('a1b2c3d4-9002-4000-a000-000000000002', 'a1b2c3d4-1002-4000-a000-000000000001',
+  ('a1b2c3d4-9002-4000-a000-000000000002', 'a1b2c3d4-1002-4000-a000-000000000002',
    'Ask the AI CFO about runway', '/cfo?prefill=How%20much%20cash%20do%20I%20have%20right%20now%2C%20and%20what%20is%20my%20runway%20in%20months%3F', 'internal', 1),
   -- Working capital → AI CFO
   ('a1b2c3d4-9003-4000-a000-000000000003', 'a1b2c3d4-1003-4000-a000-000000000001',
    'Ask the AI CFO about cash + runway', '/cfo?prefill=How%20much%20cash%20do%20I%20have%20right%20now%2C%20and%20what%20is%20my%20runway%20in%20months%3F', 'internal', 1),
   -- AR aging → Debts page
-  ('a1b2c3d4-9004-4000-a000-000000000004', 'a1b2c3d4-1004-4000-a000-000000000001',
+  ('a1b2c3d4-9004-4000-a000-000000000004', 'a1b2c3d4-1004-4000-a000-000000000004',
    'Open the Debts page', '/debts', 'internal', 1),
   -- Product mix → AI CFO
   ('a1b2c3d4-9005-4000-a000-000000000005', 'a1b2c3d4-2001-4000-a000-000000000001',
@@ -251,6 +284,6 @@ INSERT INTO lesson_resources (id, lesson_id, label, href, kind, display_order) V
   ('a1b2c3d4-9007-4000-a000-000000000007', 'a1b2c3d4-3003-4000-a000-000000000003',
    'Open the Profitability page', '/profitability', 'internal', 1),
   -- Hiring → AI CFO
-  ('a1b2c3d4-9008-4000-a000-000000000008', 'a1b2c3d4-3004-4000-a000-000000000003',
+  ('a1b2c3d4-9008-4000-a000-000000000008', 'a1b2c3d4-3004-4000-a000-000000000004',
    'Ask the AI CFO about revenue trends', '/cfo?prefill=What%20is%20my%20revenue%20trend%20over%20the%20last%203%20months%2C%20and%20is%20revenue-per-employee%20dropping%3F', 'internal', 1)
 ON CONFLICT (id) DO NOTHING;
