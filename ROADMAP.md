@@ -168,7 +168,7 @@ Operations & Scaling
 - [x] **4C.3.** Route `/(pos)/learn/[pillarSlug]/[lessonSlug]/` — lesson reader
       with markdown render, optional audio player, "Apply to your business"
       CTA list, "Take quiz" button
-- [ ] **4C.4.** Add "Learn" tab to POS bottom nav (will require reshaping the
+- [x] **4C.4.** Add "Learn" tab to POS bottom nav (will require reshaping the
       5-icon bar to 4 primary + drawer, or scrollable strip)
 - [ ] **4C.5.** Add "Today's lesson" widget to dashboard
 - [ ] **4C.6.** Add lesson-completion celebration (sonner toast + small XP-style
