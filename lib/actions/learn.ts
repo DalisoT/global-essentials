@@ -326,7 +326,16 @@ export async function updateLessonProgress(
     readSeconds?: number;
     completed?: boolean;
   }
-): Promise<{ data?: { completed: boolean; completedAt: string | null }; error?: string }> {
+): Promise<{
+  data?: {
+    completed: boolean;
+    completedAt: string | null;
+    /** True if THIS call just transitioned the lesson from not-done
+     *  to done. Used by the client to fire the 4C.6 celebration toast. */
+    newlyCompleted: boolean;
+  };
+  error?: string;
+}> {
   const auth = await requireAuth();
   if ('error' in auth) return { error: auth.error };
   const { supabase, userId } = auth;
@@ -388,7 +397,13 @@ export async function updateLessonProgress(
 
   if (error) return { error: error.message };
   const completedAtOut = (upserted as { completed_at?: string | null } | null)?.completed_at ?? null;
-  return { data: { completed: !!completedAtOut, completedAt: completedAtOut } };
+  return {
+    data: {
+      completed: !!completedAtOut,
+      completedAt: completedAtOut,
+      newlyCompleted: wantsComplete,
+    },
+  };
 }
 
 /**
@@ -448,7 +463,10 @@ export async function getUserLessonProgress(
  */
 export async function markLessonRead(
   lessonId: string
-): Promise<{ data?: { completed: boolean; completedAt: string | null }; error?: string }> {
+): Promise<{
+  data?: { completed: boolean; completedAt: string | null; newlyCompleted: boolean };
+  error?: string;
+}> {
   // Reuse updateLessonProgress with completed: true. It already
   // enforces the sticky-once-completed rule.
   return updateLessonProgress(lessonId, { completed: true });

@@ -166,9 +166,11 @@ export default async function LessonPage({
       </article>
 
       {/* 4D.1 — read-time tracker. Lives at the bottom of the article
-          so the manual "Mark as read" button sits where users finish. */}
+          so the manual "Mark as read" button sits where users finish.
+          4C.6 — also fires the completion-celebration toast. */}
       <LessonProgressTracker
         lessonId={lesson.id}
+        lessonTitle={lesson.title}
         initialCompleted={initialCompleted}
         initialReadSeconds={initialReadSeconds}
         initialScrollDepthPct={initialScrollDepthPct}

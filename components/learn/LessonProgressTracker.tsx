@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { updateLessonProgress, markLessonRead } from '@/lib/actions/learn';
+import { fireCompletionCelebration } from '@/components/learn/celebration';
 
 /**
  * LessonProgressTracker (Phase 4 / 4D.1).
@@ -29,6 +30,8 @@ import { updateLessonProgress, markLessonRead } from '@/lib/actions/learn';
 
 interface LessonProgressTrackerProps {
   lessonId: string;
+  /** Lesson title — used by the 4C.6 celebration toast. */
+  lessonTitle: string;
   initialCompleted: boolean;
   /** Optional: read_seconds the user has already accumulated (from a prior visit). */
   initialReadSeconds?: number;
@@ -43,6 +46,7 @@ const TIME_SAVE_INTERVAL_MS = 15000;
 
 export function LessonProgressTracker({
   lessonId,
+  lessonTitle,
   initialCompleted,
   initialReadSeconds = 0,
   initialScrollDepthPct = 0,
@@ -97,6 +101,11 @@ export function LessonProgressTracker({
     if (markDone === true && res.data?.completed) {
       setCompleted(true);
       lastAutoCompleteAttemptRef.current = true;
+      // 4C.6 — fire the celebration toast only when THIS call
+      // transitioned the lesson from not-done to done.
+      if (res.data.newlyCompleted) {
+        fireCompletionCelebration(lessonTitle);
+      }
     }
     maxScrollSeenOnServerRef.current = scrollPct;
     lastSavedSecondsRef.current = readSecs;
@@ -201,6 +210,11 @@ export function LessonProgressTracker({
     }
     setCompleted(true);
     lastAutoCompleteAttemptRef.current = true;
+    // 4C.6 — fire the celebration toast only when THIS click
+    // transitioned the lesson from not-done to done.
+    if (res.data?.newlyCompleted) {
+      fireCompletionCelebration(lessonTitle);
+    }
   };
 
   if (completed) {

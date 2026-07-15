@@ -1,29 +1,55 @@
 import Link from 'next/link';
-import { GraduationCap, BookOpen } from 'lucide-react';
-import { getPillars } from '@/lib/actions/learn';
+import { GraduationCap, BookOpen, Flame } from 'lucide-react';
+import { getPillars, getStreakSummary } from '@/lib/actions/learn';
 import { resolvePillarIcon, pillarColorClasses } from '@/lib/learn/pillar-ui';
 
 /**
- * Learning Academy — pillar grid home (Phase 4 / 4C.1).
+ * Learning Academy — pillar grid home (Phase 4 / 4C.1 + 4C.6).
  *
  * Server component. Fetches the 4 pillars + lesson counts via
  * `getPillars()` and renders them as a 1-col (mobile) / 2-col (sm+)
  * grid of tappable cards. Each card links to the pillar's lesson list
  * (4C.2 — `/(pos)/learn/[pillarSlug]/`).
+ *
+ * 4C.6 adds a streak chip next to the page title. The chip is a
+ * server-rendered summary of `getStreakSummary()` so it's always
+ * up to date when the user lands on the home page.
  */
 
 export default async function LearnHomePage() {
-  const { data: pillars, error } = await getPillars();
+  const [{ data: pillars, error }, { data: streak }] = await Promise.all([
+    getPillars(),
+    getStreakSummary(),
+  ]);
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="space-y-1">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <h1 className="text-2xl font-black tracking-tighter">Learning Academy</h1>
           <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-tactical-purple/20 text-tactical-purple">
             Beta
           </span>
+          {/* 4C.6 — streak chip. Hidden until the user has at least
+              one completed lesson, so new users don't see "0-day". */}
+          {streak && streak.totalCompleted > 0 && (
+            <span
+              className={`inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${
+                streak.streakDays > 0
+                  ? 'bg-tactical-amber/20 text-tactical-amber'
+                  : 'bg-white/5 text-white/40'
+              }`}
+              title={
+                streak.streakDays > 0
+                  ? `Read a lesson today to keep your ${streak.streakDays}-day streak alive`
+                  : 'Read a lesson today to start a new streak'
+              }
+            >
+              <Flame className="w-3 h-3" />
+              {streak.streakDays}-day streak
+            </span>
+          )}
         </div>
         <p className="text-white/50 text-xs uppercase tracking-wider">
           Financial literacy · Diversification · Business · Operations
