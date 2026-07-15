@@ -438,8 +438,25 @@ export async function computeDefaultRiskForecast(
 
   const { data: installments, error: instError } = await supabase
     .from('installments')
-    .select('amount_due, amount_paid, due_date, is_paid, paid_at')
-    .eq('client_id', clientId);
+    .select('amount_due, amount_paid, due_date, is_paid, paid_at, sale_id')
+    // installments don't carry client_id directly — they're tied to a
+    // sale, which is tied to a client. Filter by sale_id in a
+    // sub-query so we get exactly the rows for this client.
+    .in(
+      'sale_id',
+      // Two-step: get this client's sale ids, then filter installments
+      // by those. Cheap because the sales table has an index on
+      // client_id and we're limiting to one client.
+      (
+        await (async () => {
+          const { data: sales } = await supabase
+            .from('sales')
+            .select('id')
+            .eq('client_id', clientId);
+          return (sales ?? []).map((s) => (s as { id: string }).id);
+        })()
+      )
+    );
 
   if (instError) return { error: instError.message };
 
@@ -449,6 +466,7 @@ export async function computeDefaultRiskForecast(
     due_date: string;
     is_paid?: boolean;
     paid_at?: string | null;
+    sale_id?: string;
   }>;
 
   const now = new Date();
