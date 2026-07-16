@@ -16,6 +16,8 @@ export interface CatalogProductWithImages {
   stock_level: number;
   description?: string;
   images: string[];
+  /** Phase 11 — open for pre-orders (catalog self-serve + POS). */
+  pre_order_enabled?: boolean;
 }
 
 export async function getCatalogProducts() {
@@ -45,7 +47,7 @@ export async function getProductById(id: string): Promise<{ data: CatalogProduct
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from('products')
-    .select('id, name, selling_price, image_url, image_urls, stock_level')
+    .select('id, name, selling_price, image_url, image_urls, stock_level, pre_order_enabled')
     .eq('id', id)
     .single();
 

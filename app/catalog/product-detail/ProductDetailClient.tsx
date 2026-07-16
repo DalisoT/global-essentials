@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
-import { MessageCircle, Check, Star, Shield, Truck, Share2, ChevronRight, Send } from 'lucide-react';
+import { MessageCircle, Check, Star, Shield, Truck, Share2, ChevronRight, Send, ClipboardList } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AddToCartButton } from '@/components/cart/AddToCartButton';
 import { formatCurrency, cn } from '@/lib/utils';
@@ -195,6 +195,21 @@ export function ProductDetailClient({ product, relatedProducts = [], catalogProd
           {product.stock_level > 0 ? (
             <>
               <AddToCartButton product={product} />
+              {product.pre_order_enabled && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: 0.5 }}
+                >
+                  <Link
+                    href={`/catalog/${product.id}/pre-order`}
+                    className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl border border-tactical-blue/40 text-tactical-blue font-bold hover:bg-tactical-blue/10 transition-all"
+                  >
+                    <ClipboardList className="w-5 h-5" />
+                    Pre-order for the next shipment
+                  </Link>
+                </motion.div>
+              )}
               <motion.a
                 href={sendOrder()}
                 target="_blank"
@@ -208,6 +223,37 @@ export function ProductDetailClient({ product, relatedProducts = [], catalogProd
               >
                 <MessageCircle className="w-5 h-5" />
                 Order via WhatsApp
+              </motion.a>
+            </>
+          ) : product.pre_order_enabled ? (
+            // Out of stock + pre-orderable — Pre-order is the primary CTA
+            <>
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.4 }}
+              >
+                <Link
+                  href={`/catalog/${product.id}/pre-order`}
+                  className="w-full flex items-center justify-center gap-3 py-5 rounded-2xl bg-tactical-blue text-white font-black text-lg hover:bg-tactical-neon hover:text-black transition-all hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <ClipboardList className="w-6 h-6" />
+                  Pre-order · pay deposit, balance on delivery
+                </Link>
+              </motion.div>
+              <motion.a
+                href={sendOrder()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl border border-white/20 text-white/70 font-bold hover:bg-white/10 transition-all"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.5 }}
+              >
+                <MessageCircle className="w-5 h-5" />
+                Ask on WhatsApp
               </motion.a>
             </>
           ) : (

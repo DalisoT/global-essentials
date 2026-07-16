@@ -504,6 +504,76 @@ export async function getPreOrderStatsWithClient(
 void createServiceRoleClient;
 
 // ─────────────────────────────────────────────────────────────────────
+// 11.7 — Public catalog entry point
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * In-process rate limiter for the catalog self-serve form.
+ * 5 requests per IP per 10 minutes. v1 — not durable across
+ * cold starts, but the catalog won't be hit by bots in the
+ * first few months. Phase 12 should swap this for an
+ * edge-middleware limiter or a Supabase table.
+ */
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const RATE_LIMIT_MAX = 5;
+const _hits = new Map<string, number[]>();
+
+function checkRateLimit(key: string): { allowed: boolean; retryInSec?: number } {
+  const now = Date.now();
+  const cutoff = now - RATE_LIMIT_WINDOW_MS;
+  const arr = (_hits.get(key) ?? []).filter((t) => t > cutoff);
+  if (arr.length >= RATE_LIMIT_MAX) {
+    const oldest = arr[0];
+    return { allowed: false, retryInSec: Math.ceil((RATE_LIMIT_WINDOW_MS - (now - oldest)) / 1000) };
+  }
+  arr.push(now);
+  _hits.set(key, arr);
+  return { allowed: true };
+}
+
+export interface PublicCreatePreOrderInput {
+  customer_name: string;
+  customer_whatsapp: string;
+  product_id: string;
+  variant_id?: string | null;
+  shipping_mode: PreOrderShippingMode;
+  notes?: string;
+  /** Caller-supplied identifier for rate limiting (IP, session id, etc). */
+  rate_limit_key: string;
+}
+
+export async function createCatalogPreOrder(
+  input: PublicCreatePreOrderInput
+): Promise<{ data?: PreOrder; tracking_code?: string; error?: string }> {
+  // Rate limit BEFORE creating the supabase client so spam
+  // doesn't trigger the service-role key on every call.
+  const rl = checkRateLimit(input.rate_limit_key);
+  if (!rl.allowed) {
+    return {
+      error: `Too many pre-orders from this connection. Try again in ${rl.retryInSec ?? 60} seconds.`,
+    };
+  }
+
+  let supabase: SupabaseClient;
+  try {
+    supabase = await createServiceRoleClient();
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : 'Service unavailable',
+    };
+  }
+  return createPreOrderWithClient(supabase, {
+    customer_name: input.customer_name,
+    customer_whatsapp: input.customer_whatsapp,
+    product_id: input.product_id,
+    variant_id: input.variant_id ?? null,
+    shipping_mode: input.shipping_mode,
+    source: 'catalog',
+    notes: input.notes,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // POS helpers
 // ─────────────────────────────────────────────────────────────────────
 
