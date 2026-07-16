@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { getInventory, createProduct, updateProduct, deleteProduct } from '@/lib/actions/inventory';
 import { formatCurrency } from '@/lib/utils';
-import { Package, Plus, X, Pencil, Trash2, Search, ImagePlus, Upload, XCircle, ChevronLeft, ChevronRight, Eye, EyeOff, Sparkles } from 'lucide-react';
+import { Package, Plus, X, Pencil, Trash2, Search, ImagePlus, Upload, XCircle, ChevronLeft, ChevronRight, Eye, EyeOff, Sparkles, Scale, Ship, ClipboardList } from 'lucide-react';
 import Link from 'next/link';
 import { ProductDescriptionField } from '@/components/inventory/ProductDescriptionField';
 import { cn } from '@/lib/utils';
@@ -33,6 +33,10 @@ function InventoryContent() {
   const [isVisibleInCatalog, setIsVisibleInCatalog] = useState(true);
   const [stockLevel, setStockLevel] = useState('');
   const [description, setDescription] = useState('');
+  // Phase 11 — pre-order economics
+  const [weightKg, setWeightKg] = useState('1.00');
+  const [shippingPerKg, setShippingPerKg] = useState('80');
+  const [preOrderEnabled, setPreOrderEnabled] = useState(false);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
@@ -81,6 +85,9 @@ function InventoryContent() {
     setIsVisibleInCatalog(true);
     setStockLevel('');
     setDescription('');
+    setWeightKg('1.00');
+    setShippingPerKg('80');
+    setPreOrderEnabled(false);
     setImageUrls([]);
     setImageFiles([]);
     imagePreviews.forEach((url) => URL.revokeObjectURL(url));
@@ -102,6 +109,9 @@ function InventoryContent() {
     setIsVisibleInCatalog(product.is_visible_in_catalog ?? true);
     setStockLevel(product.stock_level.toString());
     setDescription(product.description ?? '');
+    setWeightKg((product.weight_kg ?? 1.0).toFixed(2));
+    setShippingPerKg((product.shipping_per_kg ?? 80).toString());
+    setPreOrderEnabled(product.pre_order_enabled ?? false);
     const existingUrls = product.image_urls && product.image_urls.length > 0
       ? product.image_urls
       : product.image_url
@@ -150,6 +160,9 @@ function InventoryContent() {
       is_visible_in_catalog: isVisibleInCatalog,
       catalog_price: catalogPrice ? parseFloat(catalogPrice) : null,
       description: description.trim() || null,
+      weight_kg: weightKg ? parseFloat(weightKg) : 1.0,
+      shipping_per_kg: shippingPerKg ? parseFloat(shippingPerKg) : null,
+      pre_order_enabled: preOrderEnabled,
     };
 
     const { error } = editingProduct
@@ -517,6 +530,77 @@ function InventoryContent() {
                       <>
                         <EyeOff className="w-4 h-4" />
                         Hidden
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Pre-order economics (Phase 11) */}
+              <div className="border-t border-white/10 pt-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <ClipboardList className="w-4 h-4 text-tactical-blue" />
+                  <p className="text-xs font-black uppercase tracking-widest text-white/60">
+                    Pre-order economics
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-white/50 mb-1.5 block">
+                      <Scale className="w-3 h-3 inline mr-1" />
+                      Weight (kg)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.05"
+                      min="0.1"
+                      value={weightKg}
+                      onChange={(e) => setWeightKg(e.target.value)}
+                      placeholder="1.0"
+                      className="w-full h-12 px-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/40 focus:outline-none focus:border-tactical-blue"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-white/50 mb-1.5 block">
+                      <Ship className="w-3 h-3 inline mr-1" />
+                      Sea rate (K per kg)
+                    </label>
+                    <input
+                      type="number"
+                      step="1"
+                      min="0"
+                      value={shippingPerKg}
+                      onChange={(e) => setShippingPerKg(e.target.value)}
+                      placeholder="80"
+                      className="w-full h-12 px-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/40 focus:outline-none focus:border-tactical-blue"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-white/60 mb-2 block">
+                    Pre-order enabled
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setPreOrderEnabled(!preOrderEnabled)}
+                    className={cn(
+                      'h-14 w-full rounded-xl border font-bold flex items-center justify-center gap-2 transition-all',
+                      preOrderEnabled
+                        ? 'bg-tactical-blue/20 border-tactical-blue text-tactical-blue'
+                        : 'bg-white/5 border-white/10 text-white/40'
+                    )}
+                  >
+                    {preOrderEnabled ? (
+                      <>
+                        <ClipboardList className="w-4 h-4" />
+                        Pre-orders open
+                      </>
+                    ) : (
+                      <>
+                        <X className="w-4 h-4" />
+                        Pre-orders off
                       </>
                     )}
                   </button>

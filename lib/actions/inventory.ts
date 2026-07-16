@@ -26,6 +26,12 @@ export async function createProduct(product: {
   image_urls?: string[];
   is_visible_in_catalog?: boolean;
   catalog_price?: number | null;
+  /** Phase 11 — sea-cargo shipping cost per kg. */
+  shipping_per_kg?: number | null;
+  /** Phase 11 — product weight in kg. */
+  weight_kg?: number | null;
+  /** Phase 11 — open for pre-orders (catalog + POS). */
+  pre_order_enabled?: boolean;
 }) {
   const auth = await requireAuth();
   if ('error' in auth) return { data: null, error: auth.error };
@@ -46,6 +52,9 @@ export async function createProduct(product: {
       image_urls: product.image_urls || null,
       is_visible_in_catalog: product.is_visible_in_catalog ?? true,
       catalog_price: product.catalog_price ?? null,
+      shipping_per_kg: product.shipping_per_kg ?? null,
+      weight_kg: product.weight_kg ?? 1.0,
+      pre_order_enabled: product.pre_order_enabled ?? false,
     }])
     .select()
     .single();
@@ -63,6 +72,9 @@ export async function updateProduct(
     image_urls?: string[];
     is_visible_in_catalog?: boolean;
     catalog_price?: number | null;
+    shipping_per_kg?: number | null;
+    weight_kg?: number | null;
+    pre_order_enabled?: boolean;
   }
 ) {
   const auth = await requireAuth();
@@ -77,6 +89,9 @@ export async function updateProduct(
   }
   if (product.selling_price !== undefined && (isNaN(product.selling_price) || product.selling_price < 0)) {
     return { data: null, error: 'Selling price cannot be negative' };
+  }
+  if (product.weight_kg !== undefined && product.weight_kg !== null && (isNaN(product.weight_kg) || product.weight_kg <= 0)) {
+    return { data: null, error: 'Weight must be a positive number' };
   }
 
   const { data, error } = await supabase
