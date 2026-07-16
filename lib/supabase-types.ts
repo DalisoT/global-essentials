@@ -13,6 +13,26 @@ export interface Product {
   lead_time_days?: number;
   /** Phase 8.1 — public catalog long-form description (Groq-generated, human-edited). */
   description?: string | null;
+  /** Phase 11 — sea-cargo shipping cost per kg. Used by the pre-order deposit calc. */
+  shipping_per_kg?: number | null;
+  /** Phase 11 — whether this product is open for pre-orders. */
+  pre_order_enabled?: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Per-size/per-colour variant of a product. Phase 8+, cost override in Phase 11. */
+export interface ProductVariant {
+  id: string;
+  product_id: string;
+  size: string | null;
+  color: string | null;
+  sku: string | null;
+  barcode: string | null;
+  stock_level: number | null;
+  price_modifier: number | null;
+  /** Phase 11 — optional per-size cost override. Falls back to products.cost_price. */
+  cost_price?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -459,6 +479,97 @@ export interface CartItem {
   quantity: number;
   image?: string;
   maxStock: number;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Pre-orders (Phase 11)
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Discriminator for the source of a pre-order.
+ *   'pos'     — registered at the counter
+ *   'catalog' — submitted via the public catalog form
+ */
+export type PreOrderSource = 'pos' | 'catalog';
+
+/**
+ * Shipping mode. Drives the expected delivery date and the
+ * shipping cost formula:
+ *   'sea' — +50 days, K70-K90/kg
+ *   'air' — +14 days, K300/kg
+ */
+export type PreOrderShippingMode = 'sea' | 'air';
+
+/**
+ * Lifecycle status. Valid transitions (enforced in the
+ * action layer):
+ *   pending → deposit_paid → arrived → completed
+ *   pending → cancelled
+ *   pending → refunded
+ *   deposit_paid → cancelled (deposit forfeited)
+ *   deposit_paid → refunded (rare, goodwill)
+ *   arrived → completed (when balance paid + collected)
+ *   arrived → cancelled (rare, e.g. wrong size on arrival)
+ */
+export type PreOrderStatus =
+  | 'pending'      // registered, no deposit yet
+  | 'deposit_paid' // deposit received
+  | 'arrived'      // stock at the shop, awaiting balance + collection
+  | 'completed'    // balance paid, customer collected
+  | 'cancelled'    // cancelled (deposit forfeited per terms)
+  | 'refunded';    // deposit returned to customer
+
+export interface PreOrder {
+  id: string;
+  /** Short public code, e.g. "PR-2026-0042". */
+  tracking_code: string | null;
+  customer_id: string | null;
+  customer_name: string;
+  customer_whatsapp: string;
+  product_id: string;
+  variant_id: string | null;
+  /** Pricing snapshot captured at order time. */
+  unit_cost: number;
+  shipping_cost: number;
+  unit_price: number;
+  deposit_amount: number;
+  balance_due: number;
+  shipping_mode: PreOrderShippingMode;
+  source: PreOrderSource;
+  status: PreOrderStatus;
+  /** YYYY-MM-DD. */
+  expected_delivery_date: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  deposit_paid_at: string | null;
+  arrived_at: string | null;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  refunded_at: string | null;
+  sale_id: string | null;
+}
+
+export type PreOrderEventType =
+  | 'created'
+  | 'deposit_paid'
+  | 'notified'
+  | 'arrived'
+  | 'balance_paid'
+  | 'completed'
+  | 'cancelled'
+  | 'refunded'
+  | 'status_changed'
+  | 'message_queued'
+  | 'message_sent';
+
+/** One row per state change or notification on a pre-order. */
+export interface PreOrderEvent {
+  id: string;
+  pre_order_id: string;
+  event_type: PreOrderEventType;
+  event_data: Record<string, unknown>;
+  created_at: string;
 }
 
 export interface Database {
