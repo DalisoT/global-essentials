@@ -574,6 +574,55 @@ export async function createCatalogPreOrder(
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// 11.8 — Public tracking lookup
+// ─────────────────────────────────────────────────────────────────────
+
+const LOOKUP_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+const LOOKUP_RATE_LIMIT_MAX = 10;
+const _lookupHits = new Map<string, number[]>();
+
+function checkLookupRate(key: string): { allowed: boolean; retryInSec?: number } {
+  const now = Date.now();
+  const cutoff = now - LOOKUP_RATE_LIMIT_WINDOW_MS;
+  const arr = (_lookupHits.get(key) ?? []).filter((t) => t > cutoff);
+  if (arr.length >= LOOKUP_RATE_LIMIT_MAX) {
+    const oldest = arr[0];
+    return {
+      allowed: false,
+      retryInSec: Math.ceil((LOOKUP_RATE_LIMIT_WINDOW_MS - (now - oldest)) / 1000),
+    };
+  }
+  arr.push(now);
+  _lookupHits.set(key, arr);
+  return { allowed: true };
+}
+
+export interface PublicLookupInput {
+  tracking_code: string;
+  rate_limit_key: string;
+}
+
+export async function lookupPreOrderPublic(
+  input: PublicLookupInput
+): Promise<{ data?: (PreOrder & { events: PreOrderEvent[] }); error?: string }> {
+  const rl = checkLookupRate(input.rate_limit_key);
+  if (!rl.allowed) {
+    return {
+      error: `Too many lookups. Try again in ${Math.ceil((rl.retryInSec ?? 60) / 60)} minutes.`,
+    };
+  }
+  let supabase: SupabaseClient;
+  try {
+    supabase = await createServiceRoleClient();
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : 'Service unavailable',
+    };
+  }
+  return getPreOrderByTrackingCodeWithClient(supabase, input.tracking_code);
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // POS helpers
 // ─────────────────────────────────────────────────────────────────────
 
