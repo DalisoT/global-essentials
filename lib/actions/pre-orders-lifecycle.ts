@@ -379,3 +379,51 @@ export async function cancelPreOrderWithClient(
   });
   return { data: updated };
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// 11.9 — record a WhatsApp message as sent
+// ─────────────────────────────────────────────────────────────────────
+
+export interface RecordMessageSentInput {
+  pre_order_id: string;
+  template_id: string;
+  message_body: string;
+}
+
+/**
+ * Audit-log a WhatsApp message that the shop owner sent
+ * manually. We don't auto-send in v1 (no WhatsApp Business
+ * API integration), so the owner clicks "Send", types
+ * the message in their own WhatsApp, then comes back to
+ * confirm. This writes a `message_sent` event so the
+ * timeline shows what was communicated.
+ */
+export async function recordMessageSent(
+  input: RecordMessageSentInput
+): Promise<{ error?: string }> {
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  return recordMessageSentWithClient(auth.supabase, input);
+}
+
+export async function recordMessageSentWithClient(
+  supabase: SupabaseClient,
+  input: RecordMessageSentInput
+): Promise<{ error?: string }> {
+  if (!input.message_body?.trim()) {
+    return { error: 'Message body is empty' };
+  }
+  // Confirm the pre-order exists
+  const { data: existing } = await supabase
+    .from('pre_orders')
+    .select('id')
+    .eq('id', input.pre_order_id)
+    .maybeSingle();
+  if (!existing) return { error: 'Pre-order not found' };
+
+  await writeEvent(supabase, input.pre_order_id, 'message_sent', {
+    template_id: input.template_id,
+    body_preview: input.message_body.slice(0, 240),
+  });
+  return {};
+}

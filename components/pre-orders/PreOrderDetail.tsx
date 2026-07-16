@@ -29,6 +29,7 @@ import {
   convertToSale,
   cancelPreOrder,
 } from '@/lib/actions/pre-orders-lifecycle';
+import { SendUpdateButton } from './SendUpdateButton';
 import type {
   PreOrder,
   PreOrderEvent,
@@ -290,6 +291,15 @@ export function PreOrderDetail({
           />
         </div>
       )}
+
+      {/* WhatsApp update — always available (even for completed/cancelled
+          pre-orders, the shop owner might want to send a follow-up) */}
+      <div className="space-y-2">
+        <p className="text-[10px] font-black uppercase tracking-widest text-white/50">
+          WhatsApp
+        </p>
+        <SendUpdateButton order={order} />
+      </div>
 
       {/* Event timeline */}
       <div className="space-y-2">
