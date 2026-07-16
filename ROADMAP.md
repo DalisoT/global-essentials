@@ -298,7 +298,99 @@ Operations & Scaling
 
 ---
 
-# PHASE 10 — Opt-in Auto-Actions
+# PHASE 11 — Pre-orders & Waitlist *(done)*
+
+> Walk-in or catalog, customer reserves a pair for a future import.
+> Deposit covers cost + shipping; balance is the margin.
+
+- [x] **11.1.** `pre_orders` + `pre_order_events` tables with RLS,
+      partial indexes, `updated_at` trigger — commit `cb22d80`
+- [x] **11.2.** Deposit calculation engine + CRUD actions
+      (`createPreOrder`, `recordDepositPayment`, etc).
+      Tracking code `PR-YYYY-NNNN` with race-safe generation —
+      commit `7cee92d`
+- [x] **11.3.** Lifecycle actions: `markArrived`, `convertToSale`,
+      `cancelPreOrder` (with optional refund). State machine
+      enforced before every transition — commit `beb7fc4`
+- [x] **11.4.** POS UI: pre-order form with live pricing preview —
+      commit `2322acf`
+- [x] **11.5.** POS UI: pre-order detail page with deposit payment,
+      mark arrived, complete sale, cancel — commit `b9a1e47`
+- [x] **11.6.** Admin `/pre-orders` list with filter pills, search,
+      stats row, and bulk mark-arrived — commit `10fc0b2`
+- [x] **11.7.** Catalog: "Pre-order" CTA on product page (primary
+      CTA when out of stock) + public form with rate-limited
+      `createCatalogPreOrder` — commit `d81a702`
+- [x] **11.8.** Public confirmation + tracking pages.
+      Rate-limited 10/hour per IP. WhatsApp handoff for
+      deposit payment — commit `5dd7886`
+- [x] **11.9.** 10 WhatsApp message templates + "Send update"
+      button on the detail page (auto-suggested by current
+      status) — commit `992c07f`
+- [x] **11.10.** Cadence cron (Day 14 in-transit, Day 30 customs,
+      Day 45 almost-there, +3 days past expected apology).
+      Idempotent per cadence_key. "X messages to send today"
+      banner on the list — commit `09fae85`
+- [x] **11.11.** Phase 9 link: pre-order stats in the weekly
+      briefing snapshot + pre-order engagement signal in
+      the memory layer (rolled into commit `484ec8b`)
+
+---
+
+# PHASE 12 — Operational Polish *(small wins, big day-to-day impact)*
+
+> The app is solid. These are the small enhancements that turn it
+> from "working" into "enjoyable to use every day".
+
+- [x] **12.1.** Surface product `weight_kg`, `shipping_per_kg`, and
+      `pre_order_enabled` in the inventory edit form. The pre-order
+      deposit math was defaulting to 1.0 kg for every product,
+      skewing the shipping cost — commit `78dfa8d`
+- [x] **12.2.** "N people waiting" badge on catalog product cards.
+      Free demand-signal that turns the catalog into a working
+      pre-order funnel even for browsers who weren't looking
+      for it — commit `9077a94`
+- [x] **12.3.** Pre-orders into the weekly briefing snapshot
+      (active count, this-week, converted, deposits held,
+      top-pre-ordered product) — commit `484ec8b`
+- [x] **12.4.** Pre-order engagement signal in the memory layer
+      (high/medium/low based on 60-day conversion rate) — nudges
+      the model to lean into pre-orders when they work, or
+      investigate when they don't — commit `484ec8b`
+- [x] **12.5.** End-of-day WhatsApp digest cron (19:00 Lusaka).
+      3-line summary (summary + highlight + tomorrow) lands
+      in the inbox as a `kind='custom'` recommendation —
+      commit `24dae7f`
+- [x] **12.6.** Cash drawer reconciliation tool at
+      `/(pos)/drawer/`. One row per business day. System
+      computes expected from yesterday's close + today's
+      sales − expenses + pre-order deposits; user enters
+      what they actually counted and the variance is
+      shown live — commit `5cea40e`
+
+---
+
+# PHASE 10 — Opt-in Auto-Actions *(scoped, not yet implemented)*
+
+> This is when advisory becomes automatic — per category, with audit log +
+> easy rollback. The foundation is in place (Phase 9 intelligence + Phase 11
+> pre-orders + Phase 12 daily digest). Estimated 1-2 weeks of focused work
+> to ship v1. Best done as its own session.
+
+- [ ] **10.1.** `automation_rules` table (id, category, enabled, condition JSON,
+      action JSON, created_by, created_at, last_run_at)
+- [ ] **10.2.** UI: Automations page at `/(pos)/settings/automations/`
+- [ ] **10.3.** Categories (v1):
+      - Auto-send WhatsApp reminder after N days overdue
+      - Auto-create reorder PO when stock < safety stock
+      - Auto-post expense journal when expense created
+      - Auto-tag suspicious transactions (e.g., sale > 3σ above mean)
+- [ ] **10.4.** Each rule has: dry-run mode (recommend only) vs live mode (act)
+- [ ] **10.5.** Audit log entry on every auto-action with full input + output
+- [ ] **10.6.** "Undo" button on the last 24h of auto-actions
+- [ ] **10.7.** Daily digest of auto-actions taken (email + in-app)
+
+---
 
 > This is when advisory becomes automatic — per category, with audit log +
 > easy rollback.
@@ -370,4 +462,4 @@ If you stop and come back later:
 
 ---
 
-_Last updated: Phase 9 (9.1–9.6) completed 2026-07-15, commits `0573a75` `9cd4915` `d0c2781` `ccb0efc` `c7e36c5`)_
+_Last updated: Phase 12 (12.1–12.6) completed 2026-07-16, commits `78dfa8d` `9077a94` `484ec8b` `24dae7f` `5cea40e`. Phase 10 scoped for a future session._
