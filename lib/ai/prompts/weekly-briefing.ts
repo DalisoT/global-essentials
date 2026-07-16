@@ -101,6 +101,13 @@ export interface WeeklyBriefingInput {
   // Recommendations
   pendingRecsCount: number;
   highPriorityRecsCount: number;
+  // Phase 11 — pre-orders
+  preOrdersActive: number;
+  preOrdersThisWeek: number;
+  preOrdersConverted: number;
+  preOrdersCancelled: number;
+  preOrderDepositsHeld: number;
+  preOrderTopProduct: { name: string; active: number } | null;
 }
 
 export function buildUserMessage(input: WeeklyBriefingInput): string {
@@ -160,6 +167,12 @@ CASHFLOW FORECAST (next 30 days)
 
 AI INBOX
 - Pending recommendations: ${input.pendingRecsCount} (${input.highPriorityRecsCount} high priority)
+
+PRE-ORDERS (Phase 11)
+- Active (pending + deposit paid + arrived): ${input.preOrdersActive}
+- This week: ${input.preOrdersThisWeek} new pre-orders, ${input.preOrdersConverted} converted, ${input.preOrdersCancelled} cancelled/refunded
+- Deposits held right now: ${fmt(input.preOrderDepositsHeld)}
+- Most-pre-ordered product: ${input.preOrderTopProduct ? `${input.preOrderTopProduct.name} (${input.preOrderTopProduct.active} waiting)` : 'n/a'}
 
 Return the JSON object now.`;
 }

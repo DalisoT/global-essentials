@@ -57,6 +57,16 @@ export interface MemorySnapshot {
   priorityFor: (kind: AIRecommendationKind) => 'low' | 'medium' | 'high';
   /** When this snapshot was generated (ISO). */
   generatedAt: string;
+  /** Phase 11 — pre-order engagement signal (separate from recs). */
+  preOrderSignal: {
+    total: number;
+    completed: number;
+    cancelledOrRefunded: number;
+    /** 0..1 conversion rate of created -> completed. */
+    conversionRate: number;
+    label: 'high' | 'medium' | 'low' | 'none';
+    proseForPrompt: string;
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -102,6 +112,7 @@ export async function getMemorySnapshot(): Promise<MemorySnapshot> {
   const overall = computeOverall(perKind);
   const proseForPrompt = renderProse(perKind, overall);
   const priorityFor = makePriorityFn(perKind);
+  const preOrderSignal = await computePreOrderSignal();
 
   const snapshot: MemorySnapshot = {
     perKind,
@@ -109,6 +120,7 @@ export async function getMemorySnapshot(): Promise<MemorySnapshot> {
     proseForPrompt,
     priorityFor,
     generatedAt: new Date().toISOString(),
+    preOrderSignal,
   };
   _cached = { at: Date.now(), data: snapshot };
   return snapshot;
@@ -250,6 +262,93 @@ function makePriorityFn(
  */
 export async function buildMemoryPromptBlock(): Promise<string> {
   const snap = await getMemorySnapshot();
-  if (snap.perKind.every((k) => k.label === 'none')) return '';
-  return `\n\nUSER PREFERENCES (60-day engagement history):\n${snap.proseForPrompt}`;
+  if (snap.perKind.every((k) => k.label === 'none') && !snap.preOrderSignal.proseForPrompt) {
+    return '';
+  }
+  const parts: string[] = [];
+  if (!snap.perKind.every((k) => k.label === 'none')) {
+    parts.push(`\n\nUSER PREFERENCES (60-day engagement history):\n${snap.proseForPrompt}`);
+  }
+  if (snap.preOrderSignal.proseForPrompt) {
+    parts.push(`\n\nPRE-ORDER HISTORY (60 days):\n${snap.preOrderSignal.proseForPrompt}`);
+  }
+  return parts.join('');
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Phase 11 — Pre-order engagement signal
+// ─────────────────────────────────────────────────────────────────────
+
+interface PreOrderSignal {
+  total: number;
+  completed: number;
+  cancelledOrRefunded: number;
+  conversionRate: number;
+  label: 'high' | 'medium' | 'low' | 'none';
+  proseForPrompt: string;
+}
+
+async function computePreOrderSignal(): Promise<PreOrderSignal> {
+  // The recommendation history doesn't include pre_orders (they
+  // live in their own table). Fetch the last 60 days directly
+  // via the public-safe service-role action we already have.
+  let rows: Array<{ status: string }> = [];
+  try {
+    const { createServiceRoleClient } = await import('@/lib/supabase-server');
+    const supabase = await createServiceRoleClient();
+    const since = new Date();
+    since.setDate(since.getDate() - 60);
+    const { data } = await supabase
+      .from('pre_orders')
+      .select('status')
+      .gte('created_at', since.toISOString());
+    rows = (data ?? []) as Array<{ status: string }>;
+  } catch {
+    return {
+      total: 0,
+      completed: 0,
+      cancelledOrRefunded: 0,
+      conversionRate: 0,
+      label: 'none',
+      proseForPrompt: '',
+    };
+  }
+
+  const total = rows.length;
+  if (total === 0) {
+    return {
+      total: 0,
+      completed: 0,
+      cancelledOrRefunded: 0,
+      conversionRate: 0,
+      label: 'none',
+      proseForPrompt: '',
+    };
+  }
+  const completed = rows.filter((r) => r.status === 'completed').length;
+  const cancelledOrRefunded = rows.filter((r) =>
+    ['cancelled', 'refunded'].includes(r.status)
+  ).length;
+  const conversionRate = total > 0 ? completed / total : 0;
+  let label: PreOrderSignal['label'] = 'low';
+  if (conversionRate >= 0.7) label = 'high';
+  else if (conversionRate >= 0.4) label = 'medium';
+
+  let prose = '';
+  if (label === 'high') {
+    prose = `Pre-orders are working well — ${completed} of ${total} converted to completed in the last 60 days (${Math.round(conversionRate * 100)}%). Lean into pre-orders for high-value items.`;
+  } else if (label === 'medium') {
+    prose = `Pre-order conversion is middling — ${completed} of ${total} completed in the last 60 days (${Math.round(conversionRate * 100)}%). Consider following up with pending customers before the deposit cadence expires.`;
+  } else {
+    prose = `Pre-order conversion is low — ${completed} of ${total} completed in the last 60 days (${Math.round(conversionRate * 100)}%), with ${cancelledOrRefunded} cancelled/refunded. Before pushing more pre-orders, investigate why they're falling through.`;
+  }
+
+  return {
+    total,
+    completed,
+    cancelledOrRefunded,
+    conversionRate,
+    label,
+    proseForPrompt: prose,
+  };
 }

@@ -116,6 +116,18 @@ interface Snapshot {
   cashflowForecast30d: number;
   pendingRecsCount: number;
   highPriorityRecsCount: number;
+  // Phase 11 — pre-order intelligence. Three counts:
+  //   active    = currently pending/deposit_paid/arrived
+  //   this_week = new pre-orders registered in the snapshot week
+  //   converted = pre-orders that became completed in the snapshot week
+  preOrdersActive: number;
+  preOrdersThisWeek: number;
+  preOrdersConverted: number;
+  preOrdersCancelled: number;
+  /** Total deposits held in active pre-orders right now. */
+  preOrderDepositsHeld: number;
+  /** Most-pre-ordered product by active count. */
+  preOrderTopProduct: { name: string; active: number } | null;
 }
 
 async function buildSnapshot(
@@ -242,6 +254,49 @@ async function buildSnapshot(
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 3);
 
+  // ── Pre-orders (Phase 11) — pull once, derive everything
+  const { data: allPreOrders } = await supabase
+    .from('pre_orders')
+    .select('id, status, product_id, deposit_amount, completed_at, created_at, product:products(name)')
+    .gte('created_at', `${weekStart}T00:00:00`)
+    .lte('created_at', `${weekEnd}T23:59:59.999`);
+
+  // Active = everything NOT in (completed | cancelled | refunded)
+  const { data: activePreOrders } = await supabase
+    .from('pre_orders')
+    .select('id, product_id, deposit_amount, product:products(name)')
+    .in('status', ['pending', 'deposit_paid', 'arrived']);
+
+  const preOrdersThisWeek = (allPreOrders ?? []).length;
+  const preOrdersConverted = (allPreOrders ?? []).filter(
+    (p) => (p as { status: string }).status === 'completed'
+  ).length;
+  const preOrdersCancelled = (allPreOrders ?? []).filter((p) =>
+    ['cancelled', 'refunded'].includes((p as { status: string }).status)
+  ).length;
+  const preOrdersActive = (activePreOrders ?? []).length;
+  const preOrderDepositsHeld = (activePreOrders ?? []).reduce(
+    (s, p) => s + ((p as { deposit_amount: number }).deposit_amount ?? 0),
+    0
+  );
+
+  // Most-pre-ordered product right now
+  const preOrderProductCounts = new Map<string, { name: string; active: number }>();
+  for (const p of (activePreOrders ?? []) as Array<{
+    product_id: string;
+    product: { name: string } | { name: string }[] | null;
+  }>) {
+    const productRel = Array.isArray(p.product) ? p.product[0] : p.product;
+    const name = productRel?.name ?? 'Unknown';
+    const entry = preOrderProductCounts.get(name) ?? { name, active: 0 };
+    entry.active += 1;
+    preOrderProductCounts.set(name, entry);
+  }
+  const preOrderTopProduct =
+    Array.from(preOrderProductCounts.values()).sort(
+      (a, b) => b.active - a.active
+    )[0] ?? null;
+
   return {
     weekStartISO: weekStart,
     weekEndISO: weekEnd,
@@ -275,6 +330,12 @@ async function buildSnapshot(
     highPriorityRecsCount: (pendingRecs ?? []).filter(
       (r) => r.priority === 'high'
     ).length,
+    preOrdersActive,
+    preOrdersThisWeek,
+    preOrdersConverted,
+    preOrdersCancelled,
+    preOrderDepositsHeld,
+    preOrderTopProduct,
   };
 }
 
@@ -301,6 +362,12 @@ async function callBriefingModel(
     cashflowForecast30d: snapshot.cashflowForecast30d,
     pendingRecsCount: snapshot.pendingRecsCount,
     highPriorityRecsCount: snapshot.highPriorityRecsCount,
+    preOrdersActive: snapshot.preOrdersActive,
+    preOrdersThisWeek: snapshot.preOrdersThisWeek,
+    preOrdersConverted: snapshot.preOrdersConverted,
+    preOrdersCancelled: snapshot.preOrdersCancelled,
+    preOrderDepositsHeld: snapshot.preOrderDepositsHeld,
+    preOrderTopProduct: snapshot.preOrderTopProduct,
   });
 
   // 9.6 — inject the user's 60-day engagement profile into
