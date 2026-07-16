@@ -1,8 +1,10 @@
 import Link from 'next/link';
-import { Plus, ClipboardList } from 'lucide-react';
+import { Plus, ClipboardList, MessageCircle } from 'lucide-react';
 import { getPreOrderStats, listPreOrders } from '@/lib/actions/pre-orders';
+import { listQueuedMessages } from '@/lib/actions/pre-orders-cron';
 import { getProductMap } from './helpers';
 import { PreOrdersList } from '@/components/pre-orders/PreOrdersList';
+import { QueuedMessagesBanner } from '@/components/pre-orders/QueuedMessagesBanner';
 import type { PreOrderStatus } from '@/lib/supabase-types';
 
 /**
@@ -42,13 +44,14 @@ export default async function PreOrdersPage({
   const status = normaliseStatus(searchParams.status);
   const search = (searchParams.q ?? '').trim();
 
-  const [listRes, statsRes] = await Promise.all([
+  const [listRes, statsRes, queuedRes] = await Promise.all([
     listPreOrders({
       status,
       limit: 200,
       ...(search ? { whatsapp: search } : {}),
     }),
     getPreOrderStats(),
+    listQueuedMessages(),
   ]);
 
   // The list query searches by WhatsApp only; the client side
@@ -127,12 +130,21 @@ export default async function PreOrdersPage({
           Failed to load pre-orders: {listRes.error}
         </div>
       ) : (
-        <PreOrdersList
-          initialOrders={filtered}
-          productMap={productMap}
-          currentStatus={status}
-          currentSearch={search}
-        />
+        <>
+          {queuedRes.data && queuedRes.data.length > 0 && (
+            <QueuedMessagesBanner
+              messages={queuedRes.data}
+              productMap={productMap}
+              customerMap={Object.fromEntries(filtered.map((o) => [o.id, o.customer_name]))}
+            />
+          )}
+          <PreOrdersList
+            initialOrders={filtered}
+            productMap={productMap}
+            currentStatus={status}
+            currentSearch={search}
+          />
+        </>
       )}
     </div>
   );
