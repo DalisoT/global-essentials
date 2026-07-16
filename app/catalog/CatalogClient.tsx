@@ -18,9 +18,15 @@ type SortOption = 'name_asc' | 'price_low' | 'price_high' | 'stock';
 interface CatalogClientProps {
   products: CatalogProductWithImages[];
   categories: Category[];
+  /** Map of productId -> count of active pre-orders ("N people waiting"). */
+  preOrderCounts?: Record<string, number>;
 }
 
-export function CatalogClient({ products, categories }: CatalogClientProps) {
+export function CatalogClient({
+  products,
+  categories,
+  preOrderCounts = {},
+}: CatalogClientProps) {
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>('name_asc');
@@ -233,6 +239,7 @@ export function CatalogClient({ products, categories }: CatalogClientProps) {
               key={product.id}
               product={product}
               index={index}
+              preOrderCount={preOrderCounts[product.id] ?? 0}
             />
           ))}
         </div>

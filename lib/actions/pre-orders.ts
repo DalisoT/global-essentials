@@ -657,3 +657,40 @@ export async function listProductVariants(
   if (error) return { error: error.message };
   return { data: (data ?? []) as unknown as ProductVariant[] };
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// Improvement B — "N people waiting" counts for catalog cards
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Returns a map of productId -> count of active pre-orders
+ * (status in 'pending', 'deposit_paid', or 'arrived') for that
+ * product. Public-safe (no auth) so the catalog can show
+ * the badge without an account.
+ *
+ * Single query, groupBy product_id. Cheap even with thousands
+ * of pre-orders.
+ */
+export async function getActivePreOrderCountsByProduct(): Promise<{
+  data: Record<string, number>;
+  error?: string;
+}> {
+  try {
+    const supabase = await createServiceRoleClient();
+    const { data, error } = await supabase
+      .from('pre_orders')
+      .select('product_id')
+      .in('status', ['pending', 'deposit_paid', 'arrived']);
+    if (error) return { data: {}, error: error.message };
+    const counts: Record<string, number> = {};
+    for (const row of (data ?? []) as Array<{ product_id: string }>) {
+      counts[row.product_id] = (counts[row.product_id] ?? 0) + 1;
+    }
+    return { data: counts };
+  } catch (e) {
+    return {
+      data: {},
+      error: e instanceof Error ? e.message : 'Failed to load',
+    };
+  }
+}

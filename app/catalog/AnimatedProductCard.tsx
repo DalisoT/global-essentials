@@ -22,9 +22,15 @@ interface Product {
 interface AnimatedProductCardProps {
   product: Product;
   index: number;
+  /** Number of active pre-orders for this product. Shows a "N waiting" badge. */
+  preOrderCount?: number;
 }
 
-export function AnimatedProductCard({ product, index }: AnimatedProductCardProps) {
+export function AnimatedProductCard({
+  product,
+  index,
+  preOrderCount = 0,
+}: AnimatedProductCardProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -157,6 +163,13 @@ export function AnimatedProductCard({ product, index }: AnimatedProductCardProps
             <div className={`absolute top-3 right-12 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${stockStatus.class} text-black`}>
               {stockStatus.label}
             </div>
+
+            {/* Pre-order demand badge — Phase 11 */}
+            {preOrderCount > 0 && (
+              <div className="absolute top-9 right-3 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-tactical-blue/90 text-white shadow-md">
+                👥 {preOrderCount} waiting
+              </div>
+            )}
 
             {/* Wishlist Heart Button */}
             <button
