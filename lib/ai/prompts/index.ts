@@ -28,3 +28,4 @@ export * as visualSearch from './visual-search';
 export * as catalogChat from './catalog-chat';
 export * as reviewSummary from './review-summary';
 export * as weeklyBriefing from './weekly-briefing';
+export * as dailyDigest from './daily-digest';
