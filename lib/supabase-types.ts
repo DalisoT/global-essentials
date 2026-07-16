@@ -17,6 +17,8 @@ export interface Product {
   shipping_per_kg?: number | null;
   /** Phase 11 — whether this product is open for pre-orders. */
   pre_order_enabled?: boolean;
+  /** Phase 11 — product weight in kg. Defaults to 1.0 if not set. */
+  weight_kg?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -33,6 +35,8 @@ export interface ProductVariant {
   price_modifier: number | null;
   /** Phase 11 — optional per-size cost override. Falls back to products.cost_price. */
   cost_price?: number | null;
+  /** Phase 11 — optional per-size weight override in kg. Falls back to products.weight_kg. */
+  weight_kg?: number | null;
   created_at: string;
   updated_at: string;
 }
