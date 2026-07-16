@@ -25,6 +25,7 @@ import {
   ShieldCheck,
   Brain,
   GraduationCap,
+  ClipboardList,
 } from 'lucide-react';
 import { signOut } from '@/lib/actions/auth';
 import { useAuthStore } from '@/stores/auth-store';
@@ -52,6 +53,9 @@ const secondaryNav = [
   // Orders (Phase 8) — surface high in the drawer because
   // fulfil-now actions matter most.
   { href: '/orders', label: 'Orders', icon: Package },
+  // Pre-orders (Phase 11) — sit next to Orders since they're
+  // a different facet of the same inventory flow.
+  { href: '/pre-orders', label: 'Pre-orders', icon: ClipboardList },
   { href: '/inventory', label: 'Inventory', icon: Package },
   { href: '/expenses', label: 'Expenses', icon: Wallet },
   { href: '/analytics', label: 'Analytics', icon: TrendingUp },

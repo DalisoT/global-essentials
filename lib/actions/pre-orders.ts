@@ -35,6 +35,10 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { requireAuth, createServiceRoleClient } from '@/lib/supabase-server';
+import {
+  calculatePreOrderPricing,
+  type PreOrderPricing,
+} from '@/lib/pre-orders/pricing';
 import type {
   PreOrder,
   PreOrderEvent,
@@ -49,115 +53,14 @@ import type {
 // ─────────────────────────────────────────────────────────────────────
 // Constants (the "shipping policy")
 // ─────────────────────────────────────────────────────────────────────
-
-/** Sea cargo: expected delivery N days from order. */
-const SEA_CARGO_DAYS = 50;
-/** Air cargo: expected delivery N days from order. */
-const AIR_CARGO_DAYS = 14;
-
-/** Default sea-cargo rate per kg when product.shipping_per_kg is null. */
-const DEFAULT_SEA_RATE_PER_KG = 80;
-/** Air-cargo rate per kg (K300/kg per current market). */
-const AIR_RATE_PER_KG = 300;
-
-/** Buffer applied to the deposit floor (cost + shipping × 1.10). */
-const DEPOSIT_BUFFER = 0.10;
-/** Floor for the deposit: at least 50% of unit_price. */
-const DEPOSIT_FLOOR_FRACTION = 0.5;
+// The pure pricing math lives in lib/pre-orders/pricing.ts so it
+// can be reused by the client form for live preview.
 
 // ─────────────────────────────────────────────────────────────────────
 // Pure: pricing
 // ─────────────────────────────────────────────────────────────────────
 
-export interface PreOrderPricing {
-  unit_cost: number;
-  shipping_cost: number;
-  unit_price: number;
-  /** Recommended deposit (cost + shipping + buffer, floored at 50% of price). */
-  deposit_amount: number;
-  balance_due: number;
-  /** YYYY-MM-DD. */
-  expected_delivery_date: string;
-  /** Days from today to expected delivery. */
-  delivery_days: number;
-}
-
-/** Round to a clean K number (multiple of 10). Cleaner for receipts. */
-function roundToTens(n: number): number {
-  return Math.max(10, Math.round(n / 10) * 10);
-}
-
-/** YYYY-MM-DD in Africa/Lusaka. */
-function localDateString(d: Date = new Date()): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Africa/Lusaka',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(d);
-}
-
-function addDays(base: string, days: number): string {
-  const [y, m, d] = base.split('-').map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  dt.setUTCDate(dt.getUTCDate() + days);
-  const yy = dt.getUTCFullYear();
-  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(dt.getUTCDate()).padStart(2, '0');
-  return `${yy}-${mm}-${dd}`;
-}
-
-/**
- * Compute the deposit + balance for a given product / variant
- * pair under the chosen shipping mode. Pure function — no DB
- * access; pass in the product and variant data you already
- * fetched.
- *
- * Formula:
- *   unit_cost       = variant.cost_price ?? product.cost_price
- *   weight_kg       = variant.weight_kg   ?? product.weight_kg
- *   rate_per_kg     = product.shipping_per_kg ?? 80 (sea) or 300 (air)
- *   shipping_cost   = weight_kg * rate_per_kg (rounded to 1 dp)
- *   unit_price      = product.selling_price
- *   deposit_floor   = (unit_cost + shipping_cost) * 1.10
- *   deposit_min     = unit_price * 0.5
- *   deposit_amount  = max(deposit_floor, deposit_min) → round to 10s
- *   balance_due     = unit_price - deposit_amount
- */
-export function calculatePreOrderPricing(input: {
-  product: Pick<Product, 'cost_price' | 'selling_price' | 'shipping_per_kg' | 'weight_kg'>;
-  variant?: Pick<ProductVariant, 'cost_price' | 'weight_kg'> | null;
-  shippingMode: PreOrderShippingMode;
-}): PreOrderPricing {
-  const unit_cost = input.variant?.cost_price ?? input.product.cost_price;
-  const weight_kg = input.variant?.weight_kg ?? input.product.weight_kg ?? 1.0;
-  const ratePerKg =
-    input.shippingMode === 'air'
-      ? AIR_RATE_PER_KG
-      : input.product.shipping_per_kg ?? DEFAULT_SEA_RATE_PER_KG;
-  const shipping_cost = Math.round(weight_kg * ratePerKg * 100) / 100;
-  const unit_price = input.product.selling_price;
-
-  const deposit_floor = (unit_cost + shipping_cost) * (1 + DEPOSIT_BUFFER);
-  const deposit_min = unit_price * DEPOSIT_FLOOR_FRACTION;
-  const depositRaw = Math.max(deposit_floor, deposit_min);
-  const deposit_amount = roundToTens(depositRaw);
-  const balance_due = Math.max(0, unit_price - deposit_amount);
-
-  const delivery_days =
-    input.shippingMode === 'air' ? AIR_CARGO_DAYS : SEA_CARGO_DAYS;
-  const expected_delivery_date = addDays(localDateString(), delivery_days);
-
-  return {
-    unit_cost,
-    shipping_cost,
-    unit_price,
-    deposit_amount,
-    balance_due,
-    expected_delivery_date,
-    delivery_days,
-  };
-}
+export type { PreOrderPricing } from '@/lib/pre-orders/pricing';
 
 // ─────────────────────────────────────────────────────────────────────
 // Pure: tracking code
@@ -599,3 +502,39 @@ export async function getPreOrderStatsWithClient(
 // Reference createServiceRoleClient so the import is consumed
 // (catalog self-serve page will use it in 11.7).
 void createServiceRoleClient;
+
+// ─────────────────────────────────────────────────────────────────────
+// POS helpers
+// ─────────────────────────────────────────────────────────────────────
+
+/** Fetch the list of products that are open for pre-ordering. */
+export async function listPreOrderableProducts(): Promise<{
+  data?: Product[];
+  error?: string;
+}> {
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const { data, error } = await auth.supabase
+    .from('products')
+    .select('*')
+    .eq('pre_order_enabled', true)
+    .is('deleted_at', null)
+    .order('name', { ascending: true });
+  if (error) return { error: error.message };
+  return { data: (data ?? []) as unknown as Product[] };
+}
+
+/** Fetch variants for one product. Used by the pre-order form. */
+export async function listProductVariants(
+  productId: string
+): Promise<{ data?: ProductVariant[]; error?: string }> {
+  const auth = await requireAuth();
+  if ('error' in auth) return { error: auth.error };
+  const { data, error } = await auth.supabase
+    .from('product_variants')
+    .select('*')
+    .eq('product_id', productId)
+    .order('size', { ascending: true });
+  if (error) return { error: error.message };
+  return { data: (data ?? []) as unknown as ProductVariant[] };
+}
