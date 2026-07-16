@@ -342,6 +342,30 @@ export interface AIRecommendation {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Cash drawer logs (Phase 12 / E)
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * One row per business day with the opening/closing cash,
+ * the system's expected amount, and the variance.
+ *
+ * Positive `variance` = surplus (more cash than expected).
+ * Negative `variance` = shortfall (less cash than expected).
+ */
+export interface CashDrawerLog {
+  id: string;
+  /** YYYY-MM-DD. */
+  log_date: string;
+  opening_cash: number;
+  expected_cash: number;
+  closing_cash: number;
+  variance: number;
+  notes: string | null;
+  submitted_by: string | null;
+  created_at: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Goals (Phase 9 / 9.5)
 // ─────────────────────────────────────────────────────────────────────
 

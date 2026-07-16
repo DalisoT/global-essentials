@@ -26,6 +26,7 @@ import {
   Brain,
   GraduationCap,
   ClipboardList,
+  Banknote,
 } from 'lucide-react';
 import { signOut } from '@/lib/actions/auth';
 import { useAuthStore } from '@/stores/auth-store';
@@ -58,6 +59,7 @@ const secondaryNav = [
   { href: '/pre-orders', label: 'Pre-orders', icon: ClipboardList },
   { href: '/inventory', label: 'Inventory', icon: Package },
   { href: '/expenses', label: 'Expenses', icon: Wallet },
+  { href: '/drawer', label: 'Cash drawer', icon: Banknote },
   { href: '/analytics', label: 'Analytics', icon: TrendingUp },
   { href: '/profitability', label: 'Profitability', icon: BarChart3 },
   { href: '/accounting', label: 'Accounting', icon: Calculator },
