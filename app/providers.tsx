@@ -9,6 +9,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { setUser, setLoading } = useAuthStore();
 
   useEffect(() => {
+    // Manually rehydrate the auth store from localStorage. We disabled
+    // auto-hydration in the store config (skipHydration: true) to avoid
+    // a server/client render mismatch on the very first paint.
+    useAuthStore.persist.rehydrate();
+
     const supabase = createBrowserSupabaseClient();
 
     const getUser = async () => {
