@@ -49,7 +49,8 @@ function PaymentModal({ installment, onClose, onRecorded }: PaymentModalProps) {
     });
     setIsSubmitting(false);
     if (error) {
-      toast.error('Failed to record payment');
+      console.error('recordInstallmentPayment failed:', error);
+      toast.error(`Failed to record payment: ${error}`);
     } else {
       toast.success(isFull ? 'Payment recorded!' : 'Partial payment recorded');
       onRecorded();
