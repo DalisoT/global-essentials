@@ -31,8 +31,10 @@ function PaymentModal({ installment, onClose, onRecorded }: PaymentModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fullAmount = installment.amount_due;
+  const alreadyPaid = installment.amount_paid ?? 0;
+  const remaining = Math.max(0, fullAmount - alreadyPaid);
   const parsedAmount = parseFloat(amount) || 0;
-  const isFull = parsedAmount >= fullAmount;
+  const isFull = parsedAmount >= remaining;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,14 +97,14 @@ function PaymentModal({ installment, onClose, onRecorded }: PaymentModalProps) {
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 min="0"
-                max={fullAmount}
+                max={remaining}
                 step="0.01"
                 className="w-full h-12 pl-10 pr-4 bg-white/5 border border-white/10 rounded-xl text-white text-lg font-bold placeholder:text-white/30 focus:outline-none focus:border-tactical-blue"
                 placeholder={`Full amount (${formatCurrency(fullAmount)})`}
               />
             </div>
-            {parsedAmount < fullAmount && parsedAmount > 0 && (
-              <p className="text-xs text-tactical-orange mt-1">Partial payment — remaining {formatCurrency(fullAmount - parsedAmount)}</p>
+            {parsedAmount < remaining && parsedAmount > 0 && (
+              <p className="text-xs text-tactical-orange mt-1">Partial payment — remaining {formatCurrency(remaining - parsedAmount)}</p>
             )}
           </div>
 

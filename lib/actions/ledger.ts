@@ -243,14 +243,20 @@ export async function recordInstallmentPayment({
   // 2) Single UPDATE — sets is_paid, paid_at, amount_paid (server-side add), and note together.
   //    COALESCE handles null amount_paid on rows created before the column existed.
   //    The CHECK constraint (F8) `installments.amount_paid <= amount_due` guards against over-pay.
+  //    Clamp the running total to amount_due so partial payments can never violate the constraint
+  //    (defense in depth — UI also caps the input at the remaining amount).
+  const existingPaid = installment.amount_paid ?? 0;
+  const newAmountPaid = isFullPayment
+    ? installment.amount_due
+    : Math.min(installment.amount_due, existingPaid + amountPaid);
+  const nowFullyPaid = newAmountPaid >= installment.amount_due;
+
   const { error: updateError } = await supabase
     .from('installments')
     .update({
-      is_paid: isFullPayment,
+      is_paid: nowFullyPaid,
       paid_at: resolvedPaidAt,
-      amount_paid: isFullPayment
-        ? installment.amount_due
-        : (installment.amount_paid ?? 0) + amountPaid,
+      amount_paid: newAmountPaid,
       ...(note ? { note } : {}),
     })
     .eq('id', installmentId);
@@ -258,7 +264,7 @@ export async function recordInstallmentPayment({
   if (updateError) return { error: updateError.message };
 
   // 3) If this completed the sale, flip payment_status to 'paid' in one shot.
-  if (isFullPayment) {
+  if (nowFullyPaid) {
     const { data: remaining } = await supabase
       .from('installments')
       .select('id')
