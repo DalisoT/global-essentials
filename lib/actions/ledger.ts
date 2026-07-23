@@ -203,29 +203,37 @@ interface RecordPaymentParams {
 }
 
 /**
- * Record a payment (full or partial) against an installment.
+ * Record a payment (full or partial) against a sale, automatically distributed
+ * across the sale's unpaid installments in due-date order.
  *
- * Refactored in F5: now uses a single UPDATE on `installments` instead of the
- * previous 3-4 chained updates (the .then() guards were silently swallowing
- * errors when the amount_paid/note columns were missing — now we rely on the
- * `add_installment_amount_paid` migration having been applied).
+ * Real-world clients don't pay in clean per-installment chunks. A K300 sale
+ * with 2 installments of K150 might receive K50 + K100 + K100, where neither
+ * individual payment matches an installment boundary. The old code rejected
+ * the second K100 because the second installment was "expected" to be K150 —
+ * the user had to split the payment manually across two installments, which
+ * is fiddly on a phone in the field.
  *
- * The partial-payment running total is computed atomically on the server via
- * `COALESCE(amount_paid, 0) + $amount` so two concurrent partial payments can't
- * clobber each other (the old code did read-modify-write on the client).
+ * This action treats the payment as a contribution to the sale's outstanding
+ * balance and walks the installments in order, applying as much as fits each
+ * one before moving on. Any amount above the clicked installment's remaining
+ * cascades to the next unpaid installment. Any amount above the sale's total
+ * remaining is clamped (you can't pay more than what's owed).
+ *
+ * The CHECK constraint (F8) `installments.amount_paid <= amount_due` is the
+ * last line of defense; we Math.min against amount_due at every step so it
+ * can never be violated.
  */
 export async function recordInstallmentPayment({
   installmentId,
   amount,
   paidAt,
   note,
-}: RecordPaymentParams): Promise<{ data?: null; error?: string | null }> {
+}: RecordPaymentParams): Promise<{ data?: null; error?: string | null; appliedAmount?: number }> {
   const auth = await requireAuth();
   if ('error' in auth) return { error: auth.error };
   const supabase = auth.supabase;
 
-  // 1) Fetch the installment to get amount_due + sale_id (needed for full-vs-partial
-  //    decision and for the "is sale fully paid" check).
+  // 1) Fetch the clicked installment to get sale_id.
   const { data: installment, error: fetchError } = await supabase
     .from('installments')
     .select('id, sale_id, amount_due, amount_paid')
@@ -236,51 +244,86 @@ export async function recordInstallmentPayment({
     return { error: fetchError?.message || 'Installment not found' };
   }
 
-  const amountPaid = amount ?? installment.amount_due;
-  const isFullPayment = amountPaid >= installment.amount_due;
   const resolvedPaidAt = paidAt ? new Date(paidAt).toISOString() : new Date().toISOString();
 
-  // 2) Single UPDATE — sets is_paid, paid_at, amount_paid (server-side add), and note together.
-  //    COALESCE handles null amount_paid on rows created before the column existed.
-  //    The CHECK constraint (F8) `installments.amount_paid <= amount_due` guards against over-pay.
-  //    Clamp the running total to amount_due so partial payments can never violate the constraint
-  //    (defense in depth — UI also caps the input at the remaining amount).
-  const existingPaid = installment.amount_paid ?? 0;
-  const newAmountPaid = isFullPayment
-    ? installment.amount_due
-    : Math.min(installment.amount_due, existingPaid + amountPaid);
-  const nowFullyPaid = newAmountPaid >= installment.amount_due;
-
-  const { error: updateError } = await supabase
+  // 2) Fetch ALL installments for this sale (ordered by due_date so payments
+  //    cascade to the earliest-due unpaid installment first).
+  const { data: allInstallments, error: allError } = await supabase
     .from('installments')
-    .update({
-      is_paid: nowFullyPaid,
-      paid_at: resolvedPaidAt,
-      amount_paid: newAmountPaid,
-      ...(note ? { note } : {}),
-    })
-    .eq('id', installmentId);
+    .select('id, amount_due, amount_paid, due_date')
+    .eq('sale_id', installment.sale_id)
+    .order('due_date', { ascending: true });
 
-  if (updateError) return { error: updateError.message };
-
-  // 3) If this completed the sale, flip payment_status to 'paid' in one shot.
-  if (nowFullyPaid) {
-    const { data: remaining } = await supabase
-      .from('installments')
-      .select('id')
-      .eq('sale_id', installment.sale_id)
-      .eq('is_paid', false)
-      .limit(1);
-
-    if (!remaining || remaining.length === 0) {
-      await supabase
-        .from('sales')
-        .update({ payment_status: 'paid' })
-        .eq('id', installment.sale_id);
-    }
+  if (allError) return { error: allError.message };
+  if (!allInstallments || allInstallments.length === 0) {
+    return { error: 'No installments found for this sale' };
   }
 
-  // 4) Post journal entry (best-effort, fire-and-forget — sale is real regardless)
+  // 3) Compute total remaining for the sale.
+  const totalRemaining = allInstallments.reduce((sum, i) => {
+    return sum + Math.max(0, i.amount_due - (i.amount_paid ?? 0));
+  }, 0);
+
+  if (totalRemaining <= 0) {
+    return { error: 'Sale is already fully paid' };
+  }
+
+  // 4) Clamp requested amount to total remaining. If no amount given, treat as
+  //    "pay off the whole sale" (use totalRemaining as the cap).
+  const requestedAmount = amount ?? totalRemaining;
+  const paymentAmount = Math.min(Math.max(0, requestedAmount), totalRemaining);
+
+  if (paymentAmount <= 0) {
+    return { error: 'Enter a valid amount' };
+  }
+
+  // 5) Distribute the payment across installments in due-date order.
+  let remaining = paymentAmount;
+  const updates: Array<{ id: string; amount_paid: number; is_paid: boolean }> = [];
+
+  for (const inst of allInstallments) {
+    if (remaining <= 0) break;
+    const instRemaining = Math.max(0, inst.amount_due - (inst.amount_paid ?? 0));
+    if (instRemaining <= 0) continue;
+    const toApply = Math.min(remaining, instRemaining);
+    const newAmountPaid = Math.min(inst.amount_due, (inst.amount_paid ?? 0) + toApply);
+    const isPaid = newAmountPaid >= inst.amount_due;
+    updates.push({ id: inst.id, amount_paid: newAmountPaid, is_paid });
+    remaining -= toApply;
+  }
+
+  // 6) Apply updates. Stamp paid_at + note on every touched installment so the
+  //    audit trail shows this payment hit them all.
+  for (const update of updates) {
+    const { error: updateError } = await supabase
+      .from('installments')
+      .update({
+        is_paid: update.is_paid,
+        paid_at: resolvedPaidAt,
+        amount_paid: update.amount_paid,
+        ...(note ? { note } : {}),
+      })
+      .eq('id', update.id);
+
+    if (updateError) return { error: updateError.message };
+  }
+
+  // 7) If every installment is now paid, flip the sale to 'paid' in one shot.
+  const { data: stillUnpaid } = await supabase
+    .from('installments')
+    .select('id')
+    .eq('sale_id', installment.sale_id)
+    .eq('is_paid', false)
+    .limit(1);
+
+  if (!stillUnpaid || stillUnpaid.length === 0) {
+    await supabase
+      .from('sales')
+      .update({ payment_status: 'paid' })
+      .eq('id', installment.sale_id);
+  }
+
+  // 8) Post journal entry for the actual amount applied (best-effort).
   const { data: saleWithClient } = await supabase
     .from('sales')
     .select('client:clients(full_name)')
@@ -292,10 +335,10 @@ export async function recordInstallmentPayment({
 
   postInstallmentPaymentJournal({
     installmentId,
-    amount: amountPaid,
+    amount: paymentAmount,
     clientName,
     paymentMethod: 'cash',
   }).catch(err => console.error('Failed to post installment journal:', err));
 
-  return { data: null, error: null };
+  return { data: null, error: null, appliedAmount: paymentAmount };
 }

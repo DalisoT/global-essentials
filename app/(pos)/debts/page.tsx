@@ -43,7 +43,7 @@ function PaymentModal({ installment, onClose, onRecorded }: PaymentModalProps) {
       return;
     }
     setIsSubmitting(true);
-    const { error } = await recordInstallmentPayment({
+    const { error, appliedAmount } = await recordInstallmentPayment({
       installmentId: installment.id,
       amount: parsedAmount,
       paidAt: new Date(paidAt).toISOString(),
@@ -54,7 +54,14 @@ function PaymentModal({ installment, onClose, onRecorded }: PaymentModalProps) {
       console.error('recordInstallmentPayment failed:', error);
       toast.error(`Failed to record payment: ${error}`);
     } else {
-      toast.success(isFull ? 'Payment recorded!' : 'Partial payment recorded');
+      const cascades = parsedAmount > remaining;
+      if (cascades) {
+        toast.success(
+          `Payment of ${formatCurrency(appliedAmount ?? parsedAmount)} recorded — applied across installments`
+        );
+      } else {
+        toast.success(isFull ? 'Payment recorded!' : 'Partial payment recorded');
+      }
       onRecorded();
       onClose();
     }
@@ -97,12 +104,16 @@ function PaymentModal({ installment, onClose, onRecorded }: PaymentModalProps) {
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 min="0"
-                max={remaining}
                 step="0.01"
                 className="w-full h-12 pl-10 pr-4 bg-white/5 border border-white/10 rounded-xl text-white text-lg font-bold placeholder:text-white/30 focus:outline-none focus:border-tactical-blue"
                 placeholder={`Full amount (${formatCurrency(fullAmount)})`}
               />
             </div>
+            {parsedAmount > remaining && parsedAmount > 0 && (
+              <p className="text-xs text-tactical-blue mt-1">
+                Will also apply {formatCurrency(parsedAmount - remaining)} to the next unpaid installment.
+              </p>
+            )}
             {parsedAmount < remaining && parsedAmount > 0 && (
               <p className="text-xs text-tactical-orange mt-1">Partial payment — remaining {formatCurrency(remaining - parsedAmount)}</p>
             )}
