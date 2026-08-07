@@ -4,6 +4,7 @@ import './globals.css';
 import { Toaster } from 'sonner';
 import { AuthProvider } from './providers';
 import { ServiceWorkerRegistration } from '@/components/ServiceWorkerRegistration';
+import { InstallPrompt } from '@/components/InstallPrompt';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -59,6 +60,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <AuthProvider>
           <ServiceWorkerRegistration />
+          <InstallPrompt />
           {children}
           <Toaster
             position="top-center"

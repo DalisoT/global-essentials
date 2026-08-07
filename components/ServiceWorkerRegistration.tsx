@@ -150,6 +150,58 @@ export function ServiceWorkerRegistration() {
     }
   }, [isOnline, pendingCount, isSyncing]);
 
+  // ── 5. Persistent storage + background sync registration ───────
+  // Run once after the first user interaction so we don't get blocked
+  // by Safari's "user activation required" prompt suppression.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let done = false;
+    const run = async () => {
+      if (done) return;
+      done = true;
+      window.removeEventListener('pointerdown', run);
+      window.removeEventListener('keydown', run);
+
+      // 5a. Ask the browser to keep our IndexedDB even under storage pressure.
+      // Without this, the browser can evict offline sales without warning.
+      if (navigator.storage && typeof navigator.storage.persist === 'function') {
+        try {
+          const alreadyPersisted = await navigator.storage.persisted?.();
+          if (!alreadyPersisted) {
+            const granted = await navigator.storage.persist();
+            console.log(`[PWA] Persistent storage: ${granted ? 'granted' : 'denied'}`);
+          }
+        } catch (err) {
+          console.warn('[PWA] persist() failed:', err);
+        }
+      }
+
+      // 5b. Register a background-sync tag so the SW can sync pending sales
+      // even if the user has closed the app. The tag is processed by the
+      // 'sync' event handler in /sw.js. Unsupported on iOS Safari + Firefox,
+      // but harmless — we still sync on the 'online' event as a fallback.
+      try {
+        const reg = await navigator.serviceWorker?.ready;
+        // @ts-expect-error — SyncManager is not in lib.dom yet
+        if (reg?.sync && typeof reg.sync.register === 'function') {
+          // @ts-expect-error
+          await reg.sync.register('sync-sales');
+          console.log('[PWA] Background sync registered');
+        }
+      } catch (err) {
+        console.warn('[PWA] Background sync registration failed:', err);
+      }
+    };
+    // Trigger on first interaction — browsers require user activation before
+    // they let us call persist() / register sync.
+    window.addEventListener('pointerdown', run, { once: true });
+    window.addEventListener('keydown', run, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', run);
+      window.removeEventListener('keydown', run);
+    };
+  }, []);
+
   return null;
 }
 
