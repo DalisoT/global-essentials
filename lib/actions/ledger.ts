@@ -288,7 +288,7 @@ export async function recordInstallmentPayment({
     const toApply = Math.min(remaining, instRemaining);
     const newAmountPaid = Math.min(inst.amount_due, (inst.amount_paid ?? 0) + toApply);
     const isPaid = newAmountPaid >= inst.amount_due;
-    updates.push({ id: inst.id, amount_paid: newAmountPaid, is_paid });
+    updates.push({ id: inst.id, amount_paid: newAmountPaid, is_paid: isPaid });
     remaining -= toApply;
   }
 

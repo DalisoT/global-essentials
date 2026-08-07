@@ -37,7 +37,7 @@ export function ServiceWorkerRegistration() {
       registrationRef.current = reg;
       setUpdateAvailable(true);
       toast(
-        (t) => (
+        () => (
           <div className="flex flex-col gap-2">
             <div>
               <p className="font-bold text-sm">New version available</p>
@@ -48,7 +48,7 @@ export function ServiceWorkerRegistration() {
                 onClick={() => {
                   if (!registrationRef.current?.waiting) return;
                   registrationRef.current.waiting.postMessage({ type: 'SKIP_WAITING' });
-                  toast.dismiss(t);
+                  toast.dismiss('sw-update');
                 }}
                 className="px-3 py-1.5 rounded-lg bg-tactical-blue text-white text-xs font-bold"
               >
@@ -57,7 +57,7 @@ export function ServiceWorkerRegistration() {
               <button
                 onClick={() => {
                   setUpdateAvailable(false);
-                  toast.dismiss(t);
+                  toast.dismiss('sw-update');
                 }}
                 className="px-3 py-1.5 rounded-lg bg-white/10 text-white/70 text-xs font-bold"
               >

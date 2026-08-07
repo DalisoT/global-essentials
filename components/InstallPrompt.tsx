@@ -39,7 +39,9 @@ export function InstallPrompt() {
     setInstalling(true);
     const result = await promptInstall();
     setInstalling(false);
-    setOutcome(result);
+    if (result === 'accepted' || result === 'dismissed') {
+      setOutcome(result);
+    }
     if (result === 'accepted') {
       // Browser will fire 'appinstalled' which hides us via the hook
       setTimeout(() => setVisible(false), 1500);
