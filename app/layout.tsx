@@ -10,10 +10,30 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'Global Essentials - POS & Debt Management',
   description: 'Mobile-first POS system with debt management for Global Essentials',
+  applicationName: 'Global Essentials',
   manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    title: 'Essentials',
+    statusBarStyle: 'black-translucent',
+    startupImage: [
+      // iPhone X/XS/11 Pro (812x375pt @3x = 1242x2436)
+      // iOS will fall back to background_color (#0a0a0a) for sizes not
+      // listed here, so a brief black flash is acceptable.
+    ],
+  },
+  formatDetection: {
+    telephone: false,
+  },
   icons: {
-    icon: '/favicon.ico',
-    apple: '/apple-touch-icon.png',
+    icon: [
+      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/android-chrome-192x192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+    ],
   },
 };
 
@@ -23,6 +43,10 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   themeColor: '#0a0a0a',
+  // viewport-fit=cover lets the PWA use the area behind the iPhone notch /
+  // Android cutout. Combined with safe-area-inset-* in CSS, the UI sits in
+  // the visible region.
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({

@@ -32,6 +32,7 @@ import { signOut } from '@/lib/actions/auth';
 import { useAuthStore } from '@/stores/auth-store';
 import { GlobalSearch } from '@/components/GlobalSearch';
 import { ServiceWorkerRegistration } from '@/components/ServiceWorkerRegistration';
+import { InstallPrompt } from '@/components/InstallPrompt';
 import { DailyStreakNudge } from '@/components/learn/DailyStreakNudge';
 import { useSyncStatus } from '@/hooks/useSyncStatus';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -147,6 +148,7 @@ export default function POSLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-black pb-24">
       <ServiceWorkerRegistration />
+      <InstallPrompt />
       <DailyStreakNudge />
       {/* Header */}
       <header className="sticky top-0 z-40 bg-black/80 backdrop-blur-xl border-b border-white/10">
